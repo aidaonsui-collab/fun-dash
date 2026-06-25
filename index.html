@@ -70,16 +70,17 @@
   .overlay{
     position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
     background:rgba(8,11,30,.78); backdrop-filter:blur(3px); text-align:center; padding:18px;
+    overflow-y:auto;   /* if a card is taller than the stage, scroll instead of clipping the top/bottom */
   }
-  .card{ width:min(560px,92%); }
-  h1{ margin:.1em 0; font-size:clamp(30px,6vw,52px); letter-spacing:1px;
+  .card{ width:min(560px,92%); margin:auto; }   /* margin:auto centres when it fits, stays reachable (no clip) when it overflows */
+  h1{ margin:.04em 0; font-size:clamp(26px,5vw,42px); letter-spacing:1px;
       text-shadow:0 4px 0 rgba(0,0,0,.25); }
   h1 .a{ color:var(--accent) } h1 .b{ color:var(--accent2) }
   .sub{ color:var(--muted); margin:0 0 18px; font-size:15px }
-  .pickrow{ display:flex; gap:10px; justify-content:center; margin:14px 0 20px; flex-wrap:wrap }
+  .pickrow{ display:flex; gap:9px; justify-content:center; margin:8px 0 10px; flex-wrap:wrap }
   .pick{ cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:5px; }
   .critter{
-    width:62px; height:62px; border-radius:50%; position:relative;
+    width:52px; height:52px; border-radius:50%; position:relative;
     display:flex; align-items:center; justify-content:center; font-size:30px; line-height:1;
     border:3px solid transparent; transition:transform .1s, border-color .1s;
     box-shadow:inset 0 -6px 10px rgba(0,0,0,.18);
@@ -91,14 +92,14 @@
   .pick.sel .pname{ color:#fff }
   .btn{
     pointer-events:auto; cursor:pointer; border:none; border-radius:14px;
-    padding:14px 30px; font-size:20px; font-weight:bold; color:#1a1330;
+    padding:11px 26px; font-size:18px; font-weight:bold; color:#1a1330;
     background:linear-gradient(180deg,#ffe27a,var(--accent));
     box-shadow:0 6px 0 #c79a14, 0 10px 22px rgba(0,0,0,.35); transition:transform .06s, box-shadow .06s;
     font-family:inherit;
   }
   .btn:active{ transform:translateY(4px); box-shadow:0 2px 0 #c79a14, 0 6px 14px rgba(0,0,0,.35) }
-  .legend{ display:flex; gap:14px; justify-content:center; flex-wrap:wrap; margin:16px 0 4px; color:var(--muted); font-size:13px }
-  .legend span{ background:rgba(255,255,255,.06); padding:6px 10px; border-radius:10px }
+  .legend{ display:flex; gap:8px; justify-content:center; flex-wrap:wrap; margin:6px 0 2px; color:var(--muted); font-size:11px }
+  .legend span{ background:rgba(255,255,255,.06); padding:4px 8px; border-radius:9px }
   .maprow{ display:flex; gap:16px; justify-content:center; margin:14px 0 6px; flex-wrap:wrap }
   .mapcard{ cursor:pointer; width:190px; border-radius:14px; overflow:hidden; border:3px solid transparent;
     box-shadow:0 8px 20px rgba(0,0,0,.4); transition:transform .1s, border-color .1s; background:#222a55 }
@@ -140,8 +141,8 @@
   .critter img{ animation:floaty 3s ease-in-out infinite }
   @keyframes floaty{ 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-3px) } }
   /* ---- character select: hero + name input ---- */
-  .hero{ display:flex; flex-direction:column; align-items:center; gap:1px; margin:4px 0 2px }
-  .hero img{ width:92px; height:92px; object-fit:contain; filter:drop-shadow(0 6px 6px rgba(0,0,0,.35)); animation:heroBob 1.4s ease-in-out infinite }
+  .hero{ display:flex; flex-direction:column; align-items:center; gap:1px; margin:0 0 2px }
+  .hero img{ width:54px; height:54px; object-fit:contain; filter:drop-shadow(0 6px 6px rgba(0,0,0,.35)); animation:heroBob 1.4s ease-in-out infinite }
   @keyframes heroBob{ 0%,100%{transform:translateY(0)} 50%{transform:translateY(-7px)} }
   .hero .ht{ font-weight:bold; font-size:18px; color:#fff } .hero .htk{ font-size:12px; color:var(--muted) }
   .nameRow{ display:flex; gap:8px; justify-content:center; align-items:center; margin:8px 0 12px; color:var(--muted); font-size:14px }
