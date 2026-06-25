@@ -320,8 +320,12 @@ const CHARS = [
   {id:'axol',  name:'AXOL',  token:'AXOL',    species:'axolotl', c:'#4fc3e8', ear:'#f0883c', belly:'#cfeefb'},
   {id:'fud',   name:'FUD',   token:'Fud Pug', species:'pug',     c:'#cf9152', ear:'#8a5a2c', belly:'#f0d8b0'},
   {id:'pans',  name:'PANS',  token:'PandaSui',species:'panda',   c:'#3aa39c', ear:'#2a2a2a', belly:'#ffffff'},
+  {id:'adeniyi',name:'ADENIYI',token:'SUI',  species:'adeniyi', c:'#d7a884', ear:'#b07a4f', belly:'#ffffff'},
+  {id:'alon',  name:'ALON',  token:'PUMP',    species:'alon',    c:'#e6c79c', ear:'#caa46e', belly:'#ffffff'},
+  {id:'vitalik',name:'VITALIK',token:'ETH',  species:'vitalik', c:'#e8c9a8', ear:'#c79a78', belly:'#c9b8e8'},
+  {id:'elon',  name:'ELON',  token:'DOGE',    species:'elon',    c:'#d9b08c', ear:'#6b4a36', belly:'#2a2a2a'},
 ];
-const EMOJI = {hippo:'🦛', fish:'🐟', cat:'🐱', yeti:'⛄', axolotl:'🦎', pug:'🐶', panda:'🐼'};
+const EMOJI = {hippo:'🦛', fish:'🐟', cat:'🐱', yeti:'⛄', axolotl:'🦎', pug:'🐶', panda:'🐼', adeniyi:'🏃', alon:'🐍', vitalik:'🦄', elon:'🚀'};
 
 // Preload the recreated-PFP sprites; drawCritter falls back to vector art until each loads.
 const SPRITES = {};
@@ -341,6 +345,10 @@ const SHEET = {
   axol:  { src:'assets/axol_run.png?v='+SHEET_V,  frames:4 },
   fud:   { src:'assets/fud_run.png?v='+SHEET_V,   frames:4 },
   pans:  { src:'assets/pans_run.png?v='+SHEET_V,  frames:4 },
+  adeniyi:{ src:'assets/adeniyi_run.png?v='+SHEET_V, frames:4 },
+  alon:  { src:'assets/alon_run.png?v='+SHEET_V,  frames:4 },
+  vitalik:{ src:'assets/vitalik_run.png?v='+SHEET_V, frames:4 },
+  elon:  { src:'assets/elon_run.png?v='+SHEET_V,  frames:4 },
 };
 const STRIP = {};
 for (const id in SHEET){ const im = new Image(); im.src = SHEET[id].src; STRIP[id] = im; }
