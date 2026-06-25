@@ -124,6 +124,11 @@
   #stage::after{ content:''; position:absolute; inset:0; pointer-events:none; border-radius:16px;
     box-shadow:inset 0 0 120px rgba(0,0,0,.30), inset 0 2px 0 rgba(255,255,255,.10); z-index:3; }
   #hud, .overlay{ z-index:4 }
+  #muteBtn{ position:absolute; top:12px; right:12px; z-index:10; width:38px; height:38px; border-radius:10px;
+    border:1px solid rgba(255,255,255,.18); background:rgba(8,11,30,.5); color:#fff; font-size:18px; line-height:1;
+    cursor:pointer; padding:0; transition:background .15s, transform .1s }
+  #muteBtn:hover{ background:rgba(8,11,30,.82) } #muteBtn:active{ transform:scale(.92) }
+  #muteBtn.off{ opacity:.6 }
   #countNum{ animation:countPop .5s cubic-bezier(.2,1.3,.5,1) both;
     text-shadow:0 6px 0 rgba(0,0,0,.3), 0 0 40px rgba(255,207,63,.6); }
   @keyframes countPop{ 0%{ transform:scale(1.8); opacity:0 } 40%{ opacity:1 } 100%{ transform:scale(1); opacity:1 } }
@@ -192,6 +197,7 @@
 <div id="wrap">
   <div id="stage">
     <canvas id="game" width="960" height="540"></canvas>
+    <button id="muteBtn" title="Music & sound on/off">🔊</button>
 
     <!-- HUD -->
     <div id="hud" class="hidden">
@@ -354,6 +360,8 @@ let flashCol = '220,235,255';// flash tint
 let chosenChar = 0;
 let feed = [];               // kill-feed events {a,ic,v,ac,vc,t}
 let forcedTheme = null;      // map chosen in the vote lobby
+let actx = null;             // WebAudio context (lazily created on first gesture)
+let soundOn = (function(){ try{ return localStorage.getItem('fd_mute')!=='1'; }catch(e){ return true; } })();
 
 // ---- player identity, stats & (local) global-style leaderboard ----
 let playerName = ((localStorage.getItem('fd_name')||'').trim()) || ('Racer'+(1000+(Math.random()*9000|0)));
@@ -1916,8 +1924,8 @@ function showLobby(theme){
   if (lobbyCD) clearInterval(lobbyCD);
   lobbyCD=setInterval(()=>{
     t--;
-    if(t<=0){ clearInterval(lobbyCD); lobbyCD=null; head.innerHTML='<span class="a">GO!</span>'; sfx('jump'); setTimeout(beginRace, 380); }
-    else { cEl.textContent=t; sfx('drop'); }
+    if(t<=0){ clearInterval(lobbyCD); lobbyCD=null; head.innerHTML='<span class="a">GO!</span>'; goChord(); setTimeout(beginRace, 380); }
+    else { cEl.textContent=t; countTone(t); }
   }, 950);
 }
 function beginRace(){
@@ -1925,10 +1933,12 @@ function beginRace(){
   buildPips(); updateItemSlot();
   hud.classList.remove('hidden');
   raceTime = 0; state='racing';
+  startMusic(track ? track.theme : 'hills');
 }
 function endRace(){
   state='results';
   hud.classList.add('hidden');
+  stopMusic();
   const s = standings();
   const me = racers[0];
   const myPlace = s.indexOf(me)+1;
@@ -2046,6 +2056,7 @@ function shareToX(){
 function showMenu(){
   ['maplobby','lobby','results','leaderboard','countdown'].forEach(id=>document.getElementById(id).classList.add('hidden'));
   hud.classList.add('hidden'); document.getElementById('menu').classList.remove('hidden'); state='menu';
+  stopMusic();
 }
 function esc(s){ return String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
@@ -2140,15 +2151,18 @@ document.querySelectorAll('.lbTabBtn').forEach(b=>b.onclick=()=>{
   document.querySelectorAll('.lbTabBtn').forEach(x=>x.classList.toggle('active', x===b));
   renderLeaderboard();
 });
+(function(){ const b=document.getElementById('muteBtn'); if(!b) return;
+  b.textContent=soundOn?'🔊':'🔇'; b.classList.toggle('off',!soundOn);
+  b.onclick=()=>{ audioInit(); setSound(!soundOn); };
+})();
 document.getElementById('menuBtn').onclick=()=>showMenu();
 
 //------------------------------------------------------------------
 //  MINI SFX (WebAudio, optional)
 //------------------------------------------------------------------
-let actx=null;
-function audioInit(){ if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } }
+function audioInit(){ if(!actx){ try{ actx=new (window.AudioContext||window.webkitAudioContext)(); }catch(e){} } if(actx&&actx.state==='suspended') actx.resume(); }
 function sfx(type){
-  if(!actx) return;
+  if(!actx || !soundOn) return;
   const o=actx.createOscillator(), g=actx.createGain(); o.connect(g); g.connect(actx.destination);
   const t=actx.currentTime; let f=440, d=0.12, w='square';
   switch(type){
@@ -2171,6 +2185,57 @@ function sfx(type){
   if(type==='finish') o.frequency.exponentialRampToValueAtTime(f*1.6,t+d);
   g.gain.setValueAtTime(0.06,t); g.gain.exponentialRampToValueAtTime(0.0001,t+d);
   o.start(t); o.stop(t+d);
+}
+
+// ---- countdown jingle: rising 3·2·1 then a major-triad GO stab ----
+function countTone(n){ if(!actx||!soundOn) return; const f=[0,494,440,392][n]||440, t=actx.currentTime;
+  const o=actx.createOscillator(), g=actx.createGain(); o.type='sine'; o.frequency.setValueAtTime(f,t);
+  g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.10,t+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t+0.26);
+  o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t+0.28); }
+function goChord(){ if(!actx||!soundOn) return; const t=actx.currentTime;
+  [523.25,659.25,783.99].forEach(f=>{ const o=actx.createOscillator(), g=actx.createGain(); o.type='triangle'; o.frequency.setValueAtTime(f,t);
+    g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(0.085,t+0.02); g.gain.exponentialRampToValueAtTime(0.0001,t+0.55);
+    o.connect(g); g.connect(actx.destination); o.start(t); o.stop(t+0.58); }); }
+
+// ---- generative per-theme background music (WebAudio, no assets) ----
+const SCALES = {
+  hills:  {root:261.63, notes:[0,4,7,12,7,4],   bass:[0,7], wave:'triangle', bpm:122},
+  candy:  {root:329.63, notes:[0,4,7,11,12,7],  bass:[0,5], wave:'square',   bpm:134},
+  caves:  {root:196.00, notes:[0,3,7,10,7,3],   bass:[0,3], wave:'sine',     bpm:96},
+  frost:  {root:293.66, notes:[0,5,7,12,7,5],   bass:[0,7], wave:'sine',     bpm:104},
+  dunes:  {root:220.00, notes:[0,3,5,7,10,7],   bass:[0,5], wave:'sawtooth', bpm:112},
+  neon:   {root:261.63, notes:[0,3,7,10,12,10], bass:[0,7], wave:'sawtooth', bpm:140},
+  volcano:{root:174.61, notes:[0,3,6,7,10,6],   bass:[0,6], wave:'square',   bpm:126},
+  swamp:  {root:164.81, notes:[0,2,5,7,9,5],    bass:[0,5], wave:'triangle', bpm:100},
+};
+let musicGain=null, musicTimer=null, musicStep=0;
+function mfreq(root,s){ return root*Math.pow(2,s/12); }
+function mnote(freq,dur,wave,vol,when){
+  const o=actx.createOscillator(), g=actx.createGain(); o.type=wave; o.frequency.setValueAtTime(freq,when);
+  g.gain.setValueAtTime(0.0001,when); g.gain.exponentialRampToValueAtTime(vol,when+0.02); g.gain.exponentialRampToValueAtTime(0.0001,when+dur);
+  o.connect(g); g.connect(musicGain); o.start(when); o.stop(when+dur+0.03);
+}
+function startMusic(theme){
+  if(!actx||!soundOn) return;
+  stopMusic();
+  const S=SCALES[theme]||SCALES.hills, beat=60000/S.bpm/2;   // 8th-note grid
+  if(!musicGain){ musicGain=actx.createGain(); musicGain.gain.value=0.55; musicGain.connect(actx.destination); }
+  musicStep=0;
+  musicTimer=setInterval(()=>{
+    if(!actx||!soundOn){ stopMusic(); return; }
+    const t=actx.currentTime+0.03, bs=beat/1000;
+    mnote(mfreq(S.root, S.notes[musicStep%S.notes.length]+12), bs*0.9, S.wave, 0.028, t);            // arpeggio
+    if(musicStep%4===0) mnote(mfreq(S.root/2, S.bass[(musicStep/4)%S.bass.length]), bs*1.8, 'sine', 0.05, t);   // bass pulse
+    if(musicStep%8===4) mnote(mfreq(S.root, S.notes[(musicStep+2)%S.notes.length]+12), bs*0.5, S.wave, 0.016, t); // off-beat sparkle
+    musicStep++;
+  }, beat);
+}
+function stopMusic(){ if(musicTimer){ clearInterval(musicTimer); musicTimer=null; } }
+function setSound(on){
+  soundOn=on; try{ localStorage.setItem('fd_mute', on?'0':'1'); }catch(e){}
+  const b=document.getElementById('muteBtn'); if(b){ b.textContent=on?'🔊':'🔇'; b.classList.toggle('off',!on); }
+  if(!on) stopMusic();
+  else if(state==='racing') startMusic(track?track.theme:'hills');
 }
 
 //------------------------------------------------------------------
