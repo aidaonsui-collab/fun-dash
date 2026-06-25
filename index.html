@@ -324,8 +324,9 @@ const CHARS = [
   {id:'alon',  name:'ALON',  token:'PUMP',    species:'alon',    c:'#e6c79c', ear:'#caa46e', belly:'#ffffff'},
   {id:'vitalik',name:'VITALIK',token:'ETH',  species:'vitalik', c:'#e8c9a8', ear:'#c79a78', belly:'#c9b8e8'},
   {id:'elon',  name:'ELON',  token:'DOGE',    species:'elon',    c:'#d9b08c', ear:'#6b4a36', belly:'#2a2a2a'},
+  {id:'wojak', name:'WOJAK', token:'WOJAK',   species:'wojak',   c:'#e8cdb0', ear:'#c79a78', belly:'#8a8a8a'},
 ];
-const EMOJI = {hippo:'🦛', fish:'🐟', cat:'🐱', yeti:'⛄', axolotl:'🦎', pug:'🐶', panda:'🐼', adeniyi:'🏃', alon:'🐍', vitalik:'🦄', elon:'🚀'};
+const EMOJI = {hippo:'🦛', fish:'🐟', cat:'🐱', yeti:'⛄', axolotl:'🦎', pug:'🐶', panda:'🐼', adeniyi:'🏃', alon:'🐍', vitalik:'🦄', elon:'🚀', wojak:'😐'};
 
 // Preload the recreated-PFP sprites; drawCritter falls back to vector art until each loads.
 const SPRITES = {};
@@ -349,6 +350,7 @@ const SHEET = {
   alon:  { src:'assets/alon_run.png?v='+SHEET_V,  frames:4 },
   vitalik:{ src:'assets/vitalik_run.png?v='+SHEET_V, frames:4 },
   elon:  { src:'assets/elon_run.png?v='+SHEET_V,  frames:4 },
+  wojak: { src:'assets/wojak_run.png?v='+SHEET_V, frames:4 },
 };
 const STRIP = {};
 for (const id in SHEET){ const im = new Image(); im.src = SHEET[id].src; STRIP[id] = im; }
