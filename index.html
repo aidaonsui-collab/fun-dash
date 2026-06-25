@@ -1599,8 +1599,21 @@ function drawSprite(r, x, y, spr, air, stun, bob){
     if (stripReady && !air){
       const fr=sheet.frames; let idx=Math.floor(r.runPhase/(Math.PI*2)*fr); idx=((idx%fr)+fr)%fr;
       ctx.drawImage(strip, idx*cellW, 0, cellW, cellH, -W/2, -H, W, H);
+    } else if (air){
+      ctx.drawImage(spr, -W/2, -H, W, H);                       // mid-jump: legs tucked, no swing
     } else {
-      ctx.drawImage(spr, -W/2, -H, W, H);
+      // 2-band puppet: steady torso + legs that pump on a hip pivot — fakes a run cycle
+      // from a single still (body stays pixel-identical, only the leg silhouette changes).
+      const hipF=0.55, srcHip=cellH*hipF, hipH=H*hipF, hipY=-H+hipH, p=r.runPhase;
+      ctx.save();                                                 // torso counter-bobs against the legs
+        ctx.translate(0, Math.abs(Math.sin(p))*-1.6);
+        ctx.drawImage(spr, 0, 0, cellW, srcHip, -W/2, -H, W, hipH);
+      ctx.restore();
+      ctx.save();
+        ctx.translate(0, hipY);                                   // pivot at the hip
+        ctx.transform(1, 0, Math.sin(p)*0.34, 1 + Math.cos(p)*0.07, 0, 0);  // swing + push-off/recover
+        ctx.drawImage(spr, 0, srcHip, cellW, cellH-srcHip, -W/2, 0, W, H-hipH);  // legs
+      ctx.restore();
     }
     ctx.restore();
   }
