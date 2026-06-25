@@ -134,6 +134,54 @@
   #place b{ text-shadow:0 0 14px rgba(255,207,63,.5) }
   .critter img{ animation:floaty 3s ease-in-out infinite }
   @keyframes floaty{ 0%,100%{ transform:translateY(0) } 50%{ transform:translateY(-3px) } }
+  /* ---- character select: hero + name input ---- */
+  .hero{ display:flex; flex-direction:column; align-items:center; gap:1px; margin:4px 0 2px }
+  .hero img{ width:92px; height:92px; object-fit:contain; filter:drop-shadow(0 6px 6px rgba(0,0,0,.35)); animation:heroBob 1.4s ease-in-out infinite }
+  @keyframes heroBob{ 0%,100%{transform:translateY(0)} 50%{transform:translateY(-7px)} }
+  .hero .ht{ font-weight:bold; font-size:18px; color:#fff } .hero .htk{ font-size:12px; color:var(--muted) }
+  .nameRow{ display:flex; gap:8px; justify-content:center; align-items:center; margin:8px 0 12px; color:var(--muted); font-size:14px }
+  .nameRow input{ font-family:inherit; font-size:15px; font-weight:bold; color:#fff; text-align:center;
+    background:rgba(0,0,0,.3); border:2px solid rgba(255,255,255,.18); border-radius:10px; padding:8px 12px; width:190px; outline:none }
+  .nameRow input:focus{ border-color:var(--accent) }
+  .btnRow{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:4px }
+  .btn.ghost{ background:rgba(255,255,255,.12); color:#fff; box-shadow:0 5px 0 rgba(0,0,0,.32), 0 8px 16px rgba(0,0,0,.3) }
+  .btn.ghost:active{ transform:translateY(4px); box-shadow:0 1px 0 rgba(0,0,0,.32) }
+  .btn.sm{ padding:10px 20px; font-size:16px }
+  /* ---- pregame lobby ---- */
+  .lobbyGrid{ display:grid; grid-template-columns:1fr 1fr; gap:14px; margin:16px auto 4px; width:min(540px,94%) }
+  .pcard{ display:flex; align-items:center; gap:12px; background:rgba(255,255,255,.07); border-radius:14px; padding:10px 14px; box-shadow:inset 0 0 0 1px rgba(255,255,255,.08); animation:pcIn .3s ease both }
+  @keyframes pcIn{ from{opacity:0; transform:translateY(8px)} to{opacity:1; transform:none} }
+  .pcard.me{ background:rgba(255,207,63,.16); box-shadow:inset 0 0 0 2px var(--accent) }
+  .pcard .av{ width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex:0 0 auto }
+  .pcard .av img{ width:44px;height:44px;object-fit:contain }
+  .pcard .pinfo{ overflow:hidden }
+  .pcard .pn{ font-weight:bold;font-size:15px;color:#fff;text-align:left;overflow:hidden;text-overflow:ellipsis;white-space:nowrap }
+  .pcard .pt{ font-size:11px;color:var(--muted);text-align:left }
+  /* ---- podium ---- */
+  .podium{ display:flex; justify-content:center; align-items:flex-end; gap:6px; height:188px; margin:6px 0 12px }
+  .ppl{ display:flex; flex-direction:column; align-items:center; justify-content:flex-end; animation:pcIn .4s ease both }
+  .ppl img{ width:60px;height:60px;object-fit:contain; margin-bottom:3px; filter:drop-shadow(0 4px 4px rgba(0,0,0,.35)) }
+  .ppl .pname{ font-size:12px;font-weight:bold;color:#fff;max-width:96px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap }
+  .ppl .ptime{ font-size:10px;color:var(--muted) }
+  .ppl .pbase{ width:80px; border-radius:9px 9px 0 0; display:flex;align-items:flex-start;justify-content:center;
+    font-weight:bold;font-size:28px;color:rgba(255,255,255,.85); padding-top:4px; box-shadow:inset 0 3px 0 rgba(255,255,255,.25) }
+  /* ---- leaderboard ---- */
+  .lbWrap{ display:flex; gap:16px; width:min(660px,95%); margin:8px auto; text-align:left; flex-wrap:wrap; justify-content:center }
+  .lbStats{ background:rgba(255,255,255,.07); border-radius:14px; padding:14px 16px; min-width:200px }
+  .lbStats .big{ font-size:26px;font-weight:bold;color:var(--accent); line-height:1 } .lbStats .biglbl{ font-size:12px;color:var(--muted);margin-bottom:8px }
+  .lbStats .row{ display:flex; justify-content:space-between; gap:18px; color:#cfd6f0; font-size:14px; margin:5px 0 }
+  .lbStats .row b{ color:#fff }
+  .lbList{ flex:1; min-width:250px; background:rgba(0,0,0,.22); border-radius:14px; overflow:hidden auto; max-height:300px }
+  .lbRow{ display:flex; align-items:center; gap:10px; padding:9px 14px; font-size:14px; border-bottom:1px solid rgba(255,255,255,.05) }
+  .lbRow.me{ background:rgba(255,207,63,.18) } .lbRow.pin{ background:rgba(255,207,63,.14); position:sticky; top:0 }
+  .lbRow .rk{ width:30px;color:var(--muted);font-weight:bold } .lbRow.top3 .rk{ color:var(--accent) }
+  .lbRow .nm{ flex:1;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap } .lbRow .sc{ color:#cfd6f0;font-variant-numeric:tabular-nums;font-weight:bold }
+  /* contact note + X share */
+  .contactNote{ margin-top:13px; font-size:12.5px; color:var(--muted) }
+  .contactNote a{ color:var(--accent); font-weight:bold; text-decoration:none }
+  .contactNote a:hover{ text-decoration:underline }
+  .btn.x{ background:#111; color:#fff; box-shadow:0 5px 0 #000, 0 8px 16px rgba(0,0,0,.4) }
+  .btn.x:active{ transform:translateY(4px); box-shadow:0 1px 0 #000 }
 </style>
 </head>
 <body>
@@ -159,13 +207,17 @@
     <div id="menu" class="overlay">
       <div class="card">
         <h1>FUN <span class="a">DASH</span></h1>
-        <p class="sub">A <span style="color:var(--accent2)">Fun Run</span>–style dash starring <span style="color:var(--accent)">Sui meme coins</span>. Auto-run the track, leap the hurdles &amp; pits, grab crates, zap the leaders. First to the flag wins.</p>
-        <div style="color:var(--muted);font-size:13px;margin-bottom:4px">Pick your meme</div>
+        <div class="hero"><img id="heroImg" src="" alt=""><div class="ht" id="heroName">HIPPO</div><div class="htk" id="heroTok">$Sudeng</div></div>
         <div class="pickrow" id="pickrow"></div>
-        <button class="btn" id="startBtn">RACE!</button>
+        <div class="nameRow">👤 <input id="nameInput" maxlength="14" placeholder="Your name" autocomplete="off"></div>
+        <div class="btnRow">
+          <button class="btn" id="startBtn">RACE!</button>
+          <button class="btn ghost sm" id="lbBtn">🏆 Leaderboard</button>
+        </div>
         <div class="legend">
           <span>🚀 Boost</span><span>⚡ Zap ahead</span><span>🪚 Saw trap</span><span>🛡️ Shield</span><span>🦘 Mega-jump</span><span>🧲 Magnet</span><span>🥊 Punch</span>
         </div>
+        <div class="contactNote">🐸 Want your favorite meme in the game? <a href="https://t.me/Texxas_Sui" target="_blank" rel="noopener">Contact us for pricing →</a></div>
       </div>
     </div>
 
@@ -179,12 +231,40 @@
       </div>
     </div>
 
-    <!-- results -->
+    <!-- pregame lobby (shows the racers) -->
+    <div id="lobby" class="overlay hidden">
+      <div class="card">
+        <h1 id="lobbyHead">GAME STARTING IN <span class="a" id="lobbyCount">3</span></h1>
+        <p class="sub" id="lobbyMap">Green Hills</p>
+        <div class="lobbyGrid" id="lobbyGrid"></div>
+      </div>
+    </div>
+
+    <!-- results (podium) -->
     <div id="results" class="overlay hidden">
       <div class="card">
         <h1 id="resultTitle">FINISH!</h1>
+        <div class="sub" id="ratingGain" style="margin-top:-8px;color:var(--accent);font-weight:bold"></div>
+        <div class="podium" id="podium"></div>
         <ul class="results" id="resultList"></ul>
-        <button class="btn" id="againBtn">PLAY AGAIN</button>
+        <div class="btnRow">
+          <button class="btn" id="againBtn">PLAY AGAIN</button>
+          <button class="btn x sm" id="shareBtn">𝕏 Share</button>
+          <button class="btn ghost sm" id="lbBtn2">🏆 Leaderboard</button>
+          <button class="btn ghost sm" id="menuBtn">MENU</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- global leaderboard -->
+    <div id="leaderboard" class="overlay hidden">
+      <div class="card">
+        <h1>🏆 <span class="a">LEADERBOARD</span></h1>
+        <div class="lbWrap">
+          <div class="lbStats" id="lbStats"></div>
+          <div class="lbList" id="lbList"></div>
+        </div>
+        <button class="btn ghost" id="lbBack">BACK</button>
       </div>
     </div>
   </div>
@@ -202,7 +282,7 @@ const ctx = canvas.getContext('2d');
 const VW = 960, VH = 540;
 
 // ---- world / tuning ----
-const WORLD_LEN   = 7200;   // finish line x
+const WORLD_LEN   = 9400;   // finish line x
 const START_X     = 120;
 const GROUND_Y    = 430;    // feet baseline (screen + world share this Y)
 const GRAVITY     = 1600;
@@ -266,6 +346,22 @@ let chosenChar = 0;
 let feed = [];               // kill-feed events {a,ic,v,ac,vc,t}
 let forcedTheme = null;      // map chosen in the vote lobby
 
+// ---- player identity, stats & (local) global-style leaderboard ----
+let playerName = ((localStorage.getItem('fd_name')||'').trim()) || ('Racer'+(1000+(Math.random()*9000|0)));
+const BOT_NAMES = ['Ail4778','araBelamagda','SuperHero2500','UptoDown3','jennih75','ulises26','softonic','Ajgarcia18','lalo347','Kuwaiti1981','RunRunash','Scottmann','nySSBossY','OsuBuckeyefever','PixelPaws','TurboTuna','BoltBunny','MetaMutt','Vexel_','SnaccMan','Wizzle','GG_Wolf','NovaPaws','Krillin22','Zoomer','FrostFang'];
+const SEED_BOARD = [
+  ['Millwall',987195],['OsuBuckeyefever',938690],['lalo347',883772],['RunRunash',735854],['Kuwaiti1981',685148],
+  ['Scottmann',663870],['Ajgarcia18',612300],['softonic',561110],['araBelamagda',498233],['SuperHero2500',451774],
+  ['UptoDown3',402120],['jennih75',361988],['ulises26',318450],['nySSBossY',279330],['PixelPaws',231880],
+  ['TurboTuna',198140],['BoltBunny',162770],['MetaMutt',121940],['Vexel_',88210],['SnaccMan',54300]
+];
+function loadStats(){ let s={}; try{ s=JSON.parse(localStorage.getItem('fd_stats'))||{}; }catch(e){}
+  return Object.assign({games:0,wins:0,podiums:0,best:null,rating:0,streak:0}, s); }
+let stats = loadStats();
+let lastGain = 0;
+function saveStats(){ try{ localStorage.setItem('fd_stats', JSON.stringify(stats)); }catch(e){} }
+function savePlayerName(n){ playerName=((n||'').trim().slice(0,14))||playerName; try{ localStorage.setItem('fd_name', playerName); }catch(e){} }
+
 // ---- seeded RNG ----
 function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
 
@@ -312,7 +408,7 @@ const THEME = {
     mid:'#c98a52', sun:'#fff2c0', glow:'#ffd49a', tuft:'#caa25f',
     ambient:'sand', sunMoon:'sun', decor:'cactus', grnd:'sand'},
 };
-const TIERS = [GROUND_Y, GROUND_Y-58, GROUND_Y-116, GROUND_Y-168];  // ground heights (0 = lowest)
+const TIERS = [GROUND_Y, GROUND_Y-58, GROUND_Y-116, GROUND_Y-168, GROUND_Y-220];  // 5 ground heights (0 = lowest)
 
 // Build a multi-tier platform course: platforms at varied heights with chasms between.
 // Up-steps always sit across a gap (jump UP onto a ledge); down-steps can be adjacent (drop off).
@@ -327,25 +423,32 @@ function buildTrack(seed, themeOverride){
   segments.push({ x0:0, x1:780, y:GROUND_Y });          // flat start straight
   let cursor = 780, tier = 0;
 
-  while (cursor < WORLD_LEN - 820){
+  let lastTunnel = false;
+  while (cursor < WORLD_LEN - 900){
     const prog = cursor / WORLD_LEN;                     // 0..1 difficulty ramp
-    let gap = 0;
-    if (rnd() < 0.34 + prog*0.20){                       // chasm to clear
-      if (rnd() < 0.42){ tier = clampTier(tier+1); gap = 80 + rnd()*55 + prog*45; }      // jump UP across a modest gap
-      else { tier = clampTier(tier + (rnd()<0.55?0:-1)); gap = 105 + rnd()*70 + prog*60; } // flat/down, wider gap
-    } else if (rnd() < 0.4){
-      tier = clampTier(tier - 1);                        // adjacent drop-down (no gap)
+    let gap = 0, up = false;
+    if (lastTunnel){
+      // tunnel just ended → keep the exit flat & adjacent (no gap to mistime)
+    } else if (rnd() < 0.36 + prog*0.20){               // chasm to clear (commoner late)
+      if (rnd() < 0.50){ tier = clampTier(tier+1); up = true; gap = 70 + rnd()*38 + prog*26; } // jump UP across a gap (≤134)
+      else { tier = clampTier(tier + (rnd()<0.5?0:-1)); gap = 92 + rnd()*52 + prog*40; }         // flat/down gap (≤184)
+    } else if (rnd() < 0.5){
+      tier = clampTier(tier - 1);                        // adjacent drop-down (down-only; up needs a gap)
     }
     cursor += gap;
     const y = TIERS[tier];
-    const len = 230 + rnd()*240;
+    // covered corridor: flat, low ceiling (can't jump high) — never right after a climb or another tunnel
+    const tunnel = (!up && !lastTunnel && cursor > 1500 && rnd() < 0.17);
+    const len = tunnel ? (300 + rnd()*210) : (230 + rnd()*240);
     const seg = { x0:cursor, x1:cursor+len, y };
+    if (tunnel){ seg.tunnel = true; seg.ceil = y - 76; }
     segments.push(seg);
-    if (len > 200 && rnd() < 0.30 + prog*0.18)           // hurdle on the platform
+    if (!tunnel && len > 200 && rnd() < 0.32 + prog*0.18)   // hurdle on the platform
       obstacles.push({ x: seg.x0 + 80 + rnd()*(len-160), w:26, h: 32 + rnd()*30 + prog*22, y });
-    if (rnd() < 0.62)                                    // floating power-up crate
-      crates.push({ x: seg.x0 + len*(0.4+rnd()*0.25), y: y-86, w:36, h:36, taken:false });
+    if (rnd() < 0.66)                                    // power-up crate (low inside tunnels, under the roof)
+      crates.push({ x: seg.x0 + len*(0.4+rnd()*0.25), y: tunnel ? y-40 : y-74, w:34, h:34, gotBy:[] });
     cursor = seg.x1;
+    lastTunnel = tunnel;
   }
   segments.push({ x0:cursor, x1:WORLD_LEN+700, y:GROUND_Y });   // flat run-in to the flag
   return { theme, segments, obstacles, crates };
@@ -369,7 +472,7 @@ function segBefore(x){
 //------------------------------------------------------------------
 function makeRacer(opts){
   return {
-    name: opts.name, color: opts.color, ear: opts.ear, belly: opts.belly,
+    name: opts.name, dname: opts.dname || opts.name, color: opts.color, ear: opts.ear, belly: opts.belly,
     species: opts.species, spriteId: opts.id, isPlayer: !!opts.isPlayer,
     x: START_X, y: GROUND_Y, vy: 0, onGround: true, jumps: 0,
     runPhase: Math.random()*6,
@@ -378,6 +481,7 @@ function makeRacer(opts){
     boostT: 0, stunT: 0, shield: false, shieldT: 0,
     aiUseT: 0, hitObstacles: new Set(),
     landT: 0, popT: 0, spin: 0,   // animation timers (land squash / pickup pop / hit tumble)
+    fallStreak: 0, lastFallX: -9999,   // chasm respawn safety-net tracking
     dustT: 0, boostCol: '#ffb43c', // run-dust cadence / boost-trail tint
   };
 }
@@ -387,13 +491,14 @@ function resetRace(){
   track = buildTrack(seed, forcedTheme);
   traps = []; fx = []; feed = []; camX = 0; raceTime = 0; flashT = 0;
 
-  const spawn = (c, isPlayer) => makeRacer({
-    id:c.id, name:c.name, color:c.c, ear:c.ear, belly:c.belly, species:c.species, isPlayer
+  const botPool = BOT_NAMES.filter(n=>n.toLowerCase()!==playerName.toLowerCase()).sort(()=>Math.random()-0.5);
+  const spawn = (c, isPlayer, dname) => makeRacer({
+    id:c.id, name:c.name, dname, color:c.c, ear:c.ear, belly:c.belly, species:c.species, isPlayer
   });
-  racers = [ spawn(CHARS[chosenChar], true) ];
-  // bots = three other distinct meme mascots
+  racers = [ spawn(CHARS[chosenChar], true, playerName) ];
+  // bots = three other distinct meme mascots with random usernames
   const others = CHARS.map((_,i)=>i).filter(i=>i!==chosenChar).sort(()=>Math.random()-0.5);
-  for (let i=0;i<3;i++) racers.push(spawn(CHARS[others[i]], false));
+  for (let i=0;i<3;i++) racers.push(spawn(CHARS[others[i]], false, botPool[i]||('Bot'+(i+1))));
 }
 
 //------------------------------------------------------------------
@@ -465,7 +570,7 @@ function nearestAhead(r){
 
 // kill-feed event ("ATT  icon  VIC")
 function pushFeed(att, icon, vic){
-  feed.push({a:att.name, ic:icon, v:vic.name, ac:att.color, vc:vic.color, t:0});
+  feed.push({a:att.dname, ic:icon, v:vic.dname, ac:att.color, vc:vic.color, t:0});
   while (feed.length > 5) feed.shift();
 }
 
@@ -587,14 +692,25 @@ function update(dt){
       else if (r.y < seg.y){ r.onGround = false; }
     } else {
       r.onGround = false;
-      if (r.y > GROUND_Y + PIT_DEPTH){               // fell into a chasm -> respawn on the near ledge
-        stun(r, 0.8);
+      if (r.y > GROUND_Y + PIT_DEPTH){               // fell into a chasm
         const back = segBefore(r.x);
-        r.x = back.x1 - 26; r.y = back.y; r.vy = 0; r.onGround = true; r.jumps = 0;
+        if (Math.abs(r.x - (r.lastFallX||-9999)) < 80) r.fallStreak=(r.fallStreak||0)+1; else r.fallStreak=1;
+        r.lastFallX = r.x;
+        if (r.fallStreak >= 3){                       // safety net: a chasm you keep missing won't trap you forever
+          const fwd = track.segments.find(s => s.x0 > r.x);
+          if (fwd){ r.x = fwd.x0 + 24; r.y = fwd.y; } else { r.x = back.x1 - 60; r.y = back.y; }
+          r.fallStreak = 0; stun(r, 0.4);
+        } else {
+          stun(r, 0.8); r.x = back.x1 - 60; r.y = back.y;   // respawn with runway to set up the jump
+        }
+        r.vy = 0; r.onGround = true; r.jumps = 0;
         spawnPuff(r.x, r.y, '#3a2a1a', 10); spawnRing(r.x, r.y, 'rgba(120,90,60,0.7)', 44, 0.4);
         if (r.isPlayer) screenShake(6);
       }
     }
+
+    // ---- tunnel ceiling: low roof caps jump height inside a corridor ----
+    if (seg && seg.tunnel && r.y - CH_H < seg.ceil){ r.y = seg.ceil + CH_H; if (r.vy < 0) r.vy = 0; }
 
     // ---- hurdle collisions (each hurdle sits on its platform) ----
     for (let i=0;i<track.obstacles.length;i++){
@@ -609,15 +725,15 @@ function update(dt){
       }
     }
 
-    // ---- crate pickup ----
+    // ---- crate pickup (each racer collects each crate once; item quality scales with position) ----
     for (const c of track.crates){
-      if (c.taken) continue;
+      if (c.gotBy.length >= racers.length || c.gotBy.includes(r)) continue;
       if (r.x > c.x - (c.w/2+CH_W/2) && r.x < c.x + (c.w/2+CH_W/2)){
         const bodyTop = r.y - CH_H, bodyBot = r.y;
         if (bodyBot > c.y && bodyTop < c.y + c.h){
-          c.taken = true;
+          c.gotBy.push(r);
           r.popT = 0.25;                                // pickup pop
-          if (!r.item){ r.item = ITEMS[(Math.random()*ITEMS.length)|0]; }
+          if (!r.item) r.item = rollItem(r);            // weighted by race position
           spawnSpark(c.x, c.y, '#ffe27a');
           if (r.isPlayer){ updateItemSlot(); sfx('pickup'); }
         }
@@ -683,16 +799,15 @@ function updateAI(r, dt){
   // jump the edge of a platform (a chasm or a higher ledge ahead) or a hurdle
   const seg = segAt(r.x);
   if (r.onGround && r.stunT<=0 && seg){
-    const look = 92 + Math.random()*34;
     const distEdge = seg.x1 - r.x;
     const after = segAt(seg.x1 + 6);
-    const edgeJump = distEdge < look && (!after || after.y < seg.y - 4);   // gap or step-up
-    const hurdleClose = track.obstacles.some(o => o.x>r.x && o.x-r.x<look && Math.abs(o.y-seg.y)<24);
-    if ((edgeJump || hurdleClose) && Math.random() < 0.95){ r.vy = -JUMP_V; r.onGround=false; r.jumps=1; }
+    const gapAhead = distEdge < 46 && (!after || after.y < seg.y - 4);   // leap CLOSE to the edge (keeps the arc for the gap)
+    const hurdleClose = track.obstacles.some(o => o.x>r.x && o.x-r.x<100 && o.x-r.x>0 && Math.abs(o.y-seg.y)<24);
+    if ((gapAhead || hurdleClose) && Math.random() < 0.97){ r.vy = -JUMP_V; r.onGround=false; r.jumps=1; }
   }
-  // double-jump rescue while airborne over a chasm and sinking
-  else if (!r.onGround && r.jumps<2 && r.vy>40 && !segAt(r.x)){
-    if (Math.random()<0.7){ r.vy = -DJUMP_V; r.jumps=2; }
+  // reliably double-jump just after apex while over a chasm
+  else if (!r.onGround && r.jumps<2 && r.vy>10 && !segAt(r.x)){
+    r.vy = -DJUMP_V; r.jumps=2;
   }
 
   // item usage
@@ -726,6 +841,15 @@ function standings(){
   });
 }
 function placeOf(r){ return standings().indexOf(r)+1; }
+
+// Mario-Kart-style item luck: the further back you are, the better your odds.
+function rollItem(r){
+  const place = placeOf(r), n = racers.length;
+  const pick = a => a[(Math.random()*a.length)|0];
+  if (place === 1)               return pick(['shield','trap','spring','shield','trap']);              // leader: defensive / weak
+  if (place <= Math.ceil(n/2))   return pick(['boost','trap','shield','spring','lightning','glove']);  // midfield: mixed
+  return pick(['lightning','boost','magnet','glove','boost','lightning','magnet']);                    // back of the pack: catch-up power
+}
 
 //------------------------------------------------------------------
 //  RENDER
@@ -798,11 +922,11 @@ function drawFeed(){
   for (let i=feed.length-1;i>=0;i--){
     const e=feed[i], rx=VW-16;
     ctx.globalAlpha = Math.max(0, e.t>2.8 ? 1-(e.t-2.8)/0.6 : 1);
-    ctx.fillStyle=e.vc; ctx.fillText('$'+e.v, rx, yy);
-    const vw=ctx.measureText('$'+e.v).width;
+    ctx.fillStyle=e.vc; ctx.fillText(e.v, rx, yy);
+    const vw=ctx.measureText(e.v).width;
     ctx.fillStyle='#fff'; ctx.fillText(e.ic, rx-vw-8, yy);
     const iw=ctx.measureText(e.ic).width;
-    ctx.fillStyle=e.ac; ctx.fillText('$'+e.a, rx-vw-8-iw-8, yy);
+    ctx.fillStyle=e.ac; ctx.fillText(e.a, rx-vw-8-iw-8, yy);
     yy += 23;
   }
   ctx.globalAlpha=1;
@@ -1059,6 +1183,31 @@ function drawGround(T){
     const ox=o.x-camX; if (ox>VW+40 || ox<-40) continue;
     drawHurdle(ox, o);
   }
+  // --- tunnel roofs ---
+  for (const s of S){
+    if (!s.tunnel) continue;
+    const x=s.x0-camX, w=s.x1-s.x0; if (x>VW || x+w<0) continue;
+    drawTunnelRoof(x, w, s, T);
+  }
+}
+function drawTunnelRoof(x, w, s, T){
+  const ceil = s.ceil;
+  // darkened corridor interior
+  const sh=ctx.createLinearGradient(0,ceil,0,s.y); sh.addColorStop(0,'rgba(0,0,0,0.30)'); sh.addColorStop(1,'rgba(0,0,0,0)');
+  ctx.fillStyle=sh; ctx.fillRect(x, ceil, w, s.y-ceil);
+  // earth roof slab hanging to the ceiling line
+  const top=ceil-50;
+  const dg=ctx.createLinearGradient(0,top,0,ceil); dg.addColorStop(0,shade(T.dirt,0.04)); dg.addColorStop(1,T.dirtLo);
+  ctx.fillStyle=dg; ctx.fillRect(x, top, w, 50);
+  ctx.fillStyle='rgba(0,0,0,0.20)'; ctx.fillRect(x,top,4,50); ctx.fillRect(x+w-4,top,4,50);
+  // grass cap on the roof top
+  const gg=ctx.createLinearGradient(0,top-4,0,top+10); gg.addColorStop(0,T.grass); gg.addColorStop(1,T.grass2);
+  ctx.fillStyle=gg; ctx.fillRect(x, top-4, w, 10);
+  ctx.fillStyle=T.grassLip; ctx.fillRect(x, top-5, w, 3);
+  // scalloped underside lip + entrance/exit posts
+  ctx.fillStyle=shade(T.dirt,-0.18);
+  for(let bx=x-2; bx<x+w; bx+=18){ ctx.beginPath(); ctx.arc(bx+9, ceil, 9, 0, Math.PI); ctx.closePath(); ctx.fill(); }
+  ctx.fillStyle=shade(T.dirt,-0.22); ctx.fillRect(x-3, ceil, 6, s.y-ceil); ctx.fillRect(x+w-3, ceil, 6, s.y-ceil);
 }
 function drawPlatform(x,y,w,T,seed){
   // earth column, vertical gradient + side shading + pebbles
@@ -1118,11 +1267,12 @@ function drawHurdle(ox,o){
 }
 function drawCrates(){
   for (const c of track.crates){
-    if (c.taken) continue;
+    if (c.gotBy.length >= racers.length) continue;
     const x = c.x - camX, y = c.y;
     if (x>VW+40||x<-40) continue;
     const bob = Math.sin(raceTime*3+c.x)*4, wob = Math.sin(raceTime*2.4+c.x)*0.08;
     const segY=(segAt(c.x)||{y:GROUND_Y}).y;
+    ctx.globalAlpha = 1 - 0.5*(c.gotBy.length/racers.length);   // depletes as racers collect it
     ctx.fillStyle='rgba(0,0,0,0.16)'; ctx.beginPath(); ctx.ellipse(x,segY-2,20,5,0,0,7); ctx.fill();
     ctx.save(); ctx.translate(x, y+bob); ctx.rotate(wob);
     const pulse=0.5+0.5*Math.sin(raceTime*4+c.x);
@@ -1142,6 +1292,7 @@ function drawCrates(){
     ctx.save(); ctx.globalCompositeOperation='lighter';
     const sa=raceTime*3+c.x, spx=x+Math.cos(sa)*24, spy=y+bob+Math.sin(sa)*15;
     star5(spx,spy,3,'rgba(255,255,220,'+(0.5+0.5*Math.sin(raceTime*6+c.x))+')'); ctx.restore();
+    ctx.globalAlpha = 1;
   }
 }
 function drawTraps(){
@@ -1255,7 +1406,7 @@ function drawSprite(r, x, y, spr, air, stun, bob){
 
   // ---- name tag (pill) ----
   ctx.font='bold 12px Trebuchet MS'; ctx.textAlign='center'; ctx.textBaseline='middle';
-  const nm='$'+r.name, tw=ctx.measureText(nm).width, ny=y-H-13+bob;
+  const nm=r.dname, tw=ctx.measureText(nm).width, ny=y-H-13+bob;
   ctx.fillStyle='rgba(8,11,30,0.5)'; roundRect(x-tw/2-7, ny-9, tw+14, 18, 9); ctx.fill();
   ctx.fillStyle = r.isPlayer ? '#ffd24a' : '#ffffff'; ctx.fillText(nm, x, ny);
 
@@ -1338,7 +1489,7 @@ function drawCritter(r){
   // name tag (★ marks you)
   ctx.fillStyle = r.isPlayer ? '#ffd24a' : 'rgba(255,255,255,.95)';
   ctx.font = 'bold 12px Trebuchet MS'; ctx.textAlign='center'; ctx.textBaseline='alphabetic';
-  ctx.fillText((r.isPlayer?'★':'$')+r.name, x, y - bh - 16 + bob);
+  ctx.fillText((r.isPlayer?'★ ':'')+r.dname, x, y - bh - 16 + bob);
 }
 
 // parts drawn BEHIND the body
@@ -1505,29 +1656,54 @@ function showMapLobby(){
         `<div style="position:absolute;left:62%;bottom:0;width:30px;height:24px;background:${T.abyss}"></div>`+
         `<div style="position:absolute;left:28%;bottom:40px;width:24px;height:24px;border-radius:5px;background:#e9a23b;color:#fff;font-weight:bold;text-align:center;line-height:24px;font-size:15px">?</div>`+
       `</div><div class="nm">${T.name}</div><div class="vt">tap to race</div>`;
-    card.onclick = ()=>{ audioInit(); startRace(tk); };
+    card.onclick = ()=>{ audioInit(); startGame(tk); };
     row.appendChild(card);
   });
   let t = 5; const tEl = document.getElementById('lobbyTimer');
   tEl.textContent = 'Auto-starting in '+t+'…';
   lobbyTimer = setInterval(()=>{
     t--;
-    if (t<=0) startRace(lobbyThemes[(Math.random()*lobbyThemes.length)|0]);
+    if (t<=0) startGame(lobbyThemes[(Math.random()*lobbyThemes.length)|0]);
     else tEl.textContent = 'Auto-starting in '+t+'…';
   }, 1000);
 }
 
-function startRace(theme){
+// map chosen → build the race, then show the pregame lobby with the 4 racers
+let lobbyCD = null;
+function startGame(theme){
   if (lobbyTimer){ clearInterval(lobbyTimer); lobbyTimer=null; }
   forcedTheme = theme || null;
   resetRace();
+  showLobby(theme || track.theme);
+}
+function showLobby(theme){
+  ['menu','maplobby','results','leaderboard','countdown'].forEach(id=>document.getElementById(id).classList.add('hidden'));
+  hud.classList.add('hidden');
+  document.getElementById('lobby').classList.remove('hidden');
+  document.getElementById('lobbyMap').textContent = THEME[theme] ? THEME[theme].name : '';
+  state='lobby';
+  const grid=document.getElementById('lobbyGrid'); grid.innerHTML='';
+  racers.forEach(r=>{
+    const d=document.createElement('div'); d.className='pcard'+(r.isPlayer?' me':'');
+    d.innerHTML=`<div class="av" style="background:radial-gradient(circle at 50% 36%, ${r.color}, ${r.ear})"><img src="assets/${r.spriteId}.png" alt=""></div>`+
+      `<div class="pinfo"><div class="pn">${esc(r.dname)}${r.isPlayer?' (you)':''}</div><div class="pt">$${r.name}</div></div>`;
+    grid.appendChild(d);
+  });
+  const head=document.getElementById('lobbyHead');
+  head.innerHTML='GAME STARTING IN <span class="a" id="lobbyCount">3</span>';   // reset (last race left "GO!")
+  let t=3; const cEl=document.getElementById('lobbyCount'); cEl.textContent=t;
+  if (lobbyCD) clearInterval(lobbyCD);
+  lobbyCD=setInterval(()=>{
+    t--;
+    if(t<=0){ clearInterval(lobbyCD); lobbyCD=null; head.innerHTML='<span class="a">GO!</span>'; sfx('jump'); setTimeout(beginRace, 380); }
+    else { cEl.textContent=t; sfx('drop'); }
+  }, 950);
+}
+function beginRace(){
+  document.getElementById('lobby').classList.add('hidden');
   buildPips(); updateItemSlot();
-  document.getElementById('menu').classList.add('hidden');
-  document.getElementById('maplobby').classList.add('hidden');
-  document.getElementById('results').classList.add('hidden');
   hud.classList.remove('hidden');
-  state='countdown'; countdownT=3.0;
-  document.getElementById('countdown').classList.remove('hidden');
+  raceTime = 0; state='racing';
 }
 function endRace(){
   state='results';
@@ -1535,19 +1711,89 @@ function endRace(){
   const s = standings();
   const me = racers[0];
   const myPlace = s.indexOf(me)+1;
+  // --- update persistent stats + rating (with finish bonus + win streak) ---
+  stats.games++;
+  if (myPlace===1){ stats.wins++; stats.streak=(stats.streak||0)+1; } else { stats.streak=0; }
+  if (myPlace<=3) stats.podiums++;
+  if (me.finished && (stats.best===null || me.finishTime<stats.best)) stats.best=+me.finishTime.toFixed(2);
+  const placePts = [25,14,8,3][myPlace-1] || 1;
+  const finishBonus = me.finished ? 6 : 0;
+  const streakBonus = myPlace===1 ? (stats.streak-1)*6 : 0;       // each consecutive win is worth more
+  lastGain = placePts + finishBonus + streakBonus;
+  stats.rating += lastGain;
+  saveStats();
+  // --- title ---
   document.getElementById('resultTitle').innerHTML =
     myPlace===1 ? '🏆 YOU WIN!' : (myPlace===racers.length? 'LAST… 😵' : `${ordinal(myPlace)} place!`);
+  document.getElementById('ratingGain').textContent =
+    '+'+lastGain+' rating' + (stats.streak>1 ? `  ·  🔥 ${stats.streak} win streak!` : '');
+  // --- podium: top 3 (render order 2nd · 1st · 3rd so 1st is centre & tallest) ---
+  const cols=[[1,112,'#9fb0c8'],[0,150,'#ffd24a'],[2,84,'#cd8e54']];
+  const pod=document.getElementById('podium'); pod.innerHTML='';
+  cols.forEach((cfg,i)=>{
+    const r=s[cfg[0]]; if(!r) return;
+    const div=document.createElement('div'); div.className='ppl'; div.style.animationDelay=(i*0.12)+'s';
+    div.innerHTML=`<img src="assets/${r.spriteId}.png" alt="">`+
+      `<div class="pname">${r.isPlayer?'⭐ ':''}${esc(r.dname)}</div>`+
+      `<div class="ptime">${r.finished?r.finishTime.toFixed(1)+'s':'DNF'}</div>`+
+      `<div class="pbase" style="height:${cfg[1]}px;background:linear-gradient(${cfg[2]}, ${shade(cfg[2],-0.28)})">${cfg[0]+1}</div>`;
+    pod.appendChild(div);
+  });
+  // --- full results list (with disconnect flavour for DNFs) ---
   const ul=document.getElementById('resultList'); ul.innerHTML='';
   s.forEach((r,i)=>{
     const li=document.createElement('li'); if(r.isPlayer) li.className='you';
     const tm = r.finished ? r.finishTime.toFixed(1)+'s' : 'DNF';
-    li.innerHTML = `<span class="pos">${['🥇','🥈','🥉','4️⃣'][i]||(i+1)}</span>
-      <span class="swatch" style="background:${r.color}"></span>
-      <span class="nm">${r.name}</span><span class="tm">${tm}</span>`;
+    li.innerHTML = `<span class="pos">${['🥇','🥈','🥉','4️⃣'][i]||(i+1)}</span>`+
+      `<span class="swatch" style="background:${r.color}"></span>`+
+      `<span class="nm">${esc(r.dname)}</span><span class="tm">${tm}</span>`;
     ul.appendChild(li);
   });
   document.getElementById('results').classList.remove('hidden');
 }
+
+// ----- leaderboard (local, seeded with global-style players) -----
+function renderLeaderboard(){
+  const winPct = stats.games ? Math.round(100*stats.wins/stats.games) : 0;
+  document.getElementById('lbStats').innerHTML =
+    `<div class="big">${stats.rating.toLocaleString()}</div><div class="biglbl">your rating</div>`+
+    `<div class="row"><span>Games</span><b>${stats.games}</b></div>`+
+    `<div class="row"><span>Wins</span><b>${stats.wins}</b></div>`+
+    `<div class="row"><span>Win rate</span><b>${winPct}%</b></div>`+
+    `<div class="row"><span>Podiums</span><b>${stats.podiums}</b></div>`+
+    `<div class="row"><span>Win streak</span><b>${stats.streak||0}${stats.streak>1?' 🔥':''}</b></div>`+
+    `<div class="row"><span>Best time</span><b>${stats.best!=null?stats.best+'s':'—'}</b></div>`;
+  const all = SEED_BOARD.map(e=>({name:e[0], sc:e[1], me:false}));
+  all.push({name:playerName, sc:stats.rating, me:true});
+  all.sort((a,b)=>b.sc-a.sc);
+  const myRank = all.findIndex(e=>e.me)+1;
+  const list=document.getElementById('lbList'); list.innerHTML='';
+  const pin=document.createElement('div'); pin.className='lbRow pin';
+  pin.innerHTML=`<span class="rk">#${myRank}</span><span class="nm">${esc(playerName)} (you)</span><span class="sc">${stats.rating.toLocaleString()}</span>`;
+  list.appendChild(pin);
+  let meRow=null;
+  all.forEach((e,i)=>{
+    const row=document.createElement('div'); row.className='lbRow'+(e.me?' me':'')+(i<3?' top3':'');
+    row.innerHTML=`<span class="rk">${i+1}</span><span class="nm">${esc(e.name)}${e.me?' (you)':''}</span><span class="sc">${e.sc.toLocaleString()}</span>`;
+    list.appendChild(row); if(e.me) meRow=row;
+  });
+  // auto-scroll so your highlighted rank is visible (you usually start near the bottom)
+  if (meRow) setTimeout(()=>{ list.scrollTop = Math.max(0, meRow.offsetTop - list.clientHeight/2); }, 40);
+}
+function showLeaderboard(){ renderLeaderboard(); document.getElementById('leaderboard').classList.remove('hidden'); }
+function shareToX(){
+  const me=racers[0]||{name:'',dname:playerName,finished:false};
+  const place=racers.length?placeOf(me):1;
+  const res = place===1 ? 'won 🥇' : 'finished '+ordinal(place);
+  const tm = me.finished ? ' in '+me.finishTime.toFixed(1)+'s' : '';
+  const txt = `I ${res}${tm} racing as $${me.name} in Fun Dash 🏃💨 — a Fun Run-style racer starring Sui meme coins! Think you can beat me? 👉 t.me/Texxas_Sui #Sui #memecoins`;
+  window.open('https://twitter.com/intent/tweet?text='+encodeURIComponent(txt), '_blank', 'noopener');
+}
+function showMenu(){
+  ['maplobby','lobby','results','leaderboard','countdown'].forEach(id=>document.getElementById(id).classList.add('hidden'));
+  hud.classList.add('hidden'); document.getElementById('menu').classList.remove('hidden'); state='menu';
+}
+function esc(s){ return String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
 //------------------------------------------------------------------
 //  MAIN LOOP
@@ -1586,6 +1832,10 @@ function playerJump(){
 function playerUse(){ if (state==='racing') useItem(racers[0]); }
 
 window.addEventListener('keydown', e=>{
+  if (e.target && (e.target.tagName==='INPUT' || e.target.tagName==='TEXTAREA')){
+    if (e.code==='Enter'){ e.target.blur(); if (state==='menu') showMapLobby(); }
+    return;                                  // let the name field type normally (incl. Space)
+  }
   if (['Space','ArrowUp','KeyW','ArrowDown','KeyS','ShiftLeft','KeyE'].includes(e.code)) e.preventDefault();
   if (['Space','ArrowUp','KeyW'].includes(e.code)) playerJump();
   if (['ArrowDown','KeyS','ShiftLeft','KeyE'].includes(e.code)) playerUse();
@@ -1608,11 +1858,29 @@ CHARS.forEach((c,i)=>{
       `<img src="assets/${c.id}.png" alt="${c.name}" onerror="this.replaceWith(document.createTextNode('${EMOJI[c.species]}'))">`+
     `</div>`+
     `<div class="pname">$${c.name}</div>`;
-  wrap.onclick=()=>{ chosenChar=i; document.querySelectorAll('.pick').forEach(x=>x.classList.remove('sel')); wrap.classList.add('sel'); };
+  wrap.onclick=()=>{ chosenChar=i; document.querySelectorAll('.pick').forEach(x=>x.classList.remove('sel')); wrap.classList.add('sel'); updateHero(); };
   pickrow.appendChild(wrap);
 });
-document.getElementById('startBtn').onclick=()=>{ audioInit(); showMapLobby(); };
+function updateHero(){
+  const c=CHARS[chosenChar];
+  const im=document.getElementById('heroImg'); im.src='assets/'+c.id+'.png'; im.onerror=()=>{ im.replaceWith(document.createTextNode(EMOJI[c.species])); };
+  document.getElementById('heroName').textContent=c.name;
+  document.getElementById('heroTok').textContent='$'+c.token;
+}
+updateHero();
+// custom player name
+const nameInput=document.getElementById('nameInput');
+nameInput.value=playerName;
+nameInput.addEventListener('input', ()=>savePlayerName(nameInput.value));
+nameInput.addEventListener('change', ()=>{ nameInput.value=playerName; });
+// buttons
+document.getElementById('startBtn').onclick=()=>{ audioInit(); savePlayerName(nameInput.value); showMapLobby(); };
 document.getElementById('againBtn').onclick=()=>{ showMapLobby(); };
+document.getElementById('lbBtn').onclick=()=>showLeaderboard();
+document.getElementById('lbBtn2').onclick=()=>showLeaderboard();
+document.getElementById('shareBtn').onclick=()=>{ audioInit(); shareToX(); };
+document.getElementById('lbBack').onclick=()=>document.getElementById('leaderboard').classList.add('hidden');
+document.getElementById('menuBtn').onclick=()=>showMenu();
 
 //------------------------------------------------------------------
 //  MINI SFX (WebAudio, optional)
