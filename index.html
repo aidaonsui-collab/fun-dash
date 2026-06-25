@@ -337,7 +337,7 @@ CHARS.forEach(c => { const im = new Image(); im.src = 'assets/' + c.id + '.png';
 // feet-anchored cells. The run cycle auto-links to running speed (faster = faster):
 //   SHEET.hippo = { src:'assets/hippo_run.png', frames:8 };
 // Air & stun keep using the static PFP, so you can enable characters one at a time.
-const SHEET_V = '3';   // bump to bust any stale browser cache of the run-cycle strips
+const SHEET_V = '4';   // bump to bust any stale browser cache of the run-cycle strips
 const SHEET = {
   hippo: { src:'assets/hippo_run.png?v='+SHEET_V, frames:4 },
   blub:  { src:'assets/blub_run.png?v='+SHEET_V,  frames:4 },
@@ -350,7 +350,7 @@ const SHEET = {
   alon:  { src:'assets/alon_run.png?v='+SHEET_V,  frames:4 },
   vitalik:{ src:'assets/vitalik_run.png?v='+SHEET_V, frames:4 },
   elon:  { src:'assets/elon_run.png?v='+SHEET_V,  frames:4 },
-  wojak: { src:'assets/wojak_run.png?v='+SHEET_V, frames:4 },
+  wojak: { src:'assets/wojak_run.png?v='+SHEET_V, frames:3 },   // dropped 1 botched AI frame
 };
 const STRIP = {};
 for (const id in SHEET){ const im = new Image(); im.src = SHEET[id].src; STRIP[id] = im; }
@@ -978,6 +978,10 @@ function render(){
     drawHazards();
     drawFinish();
     const order = racers.slice().sort((a,b)=>a.x-b.x);   // back-to-front by x
+    // when racers bunch up, lift the ones behind a touch so big chibi heads stagger
+    // instead of piling into a "split head" look (render-only — shadows stay grounded)
+    let _px=-1e9, _stk=0;
+    for (const r of order){ _stk = (r.x-_px < 52 && !r.finished) ? Math.min(_stk+1,3) : 0; r._clusterLift = _stk*8; _px=r.x; }
     for (const r of order) drawCritter(r);
     drawFx();
     drawSpeedLines();
@@ -1668,7 +1672,7 @@ function drawSprite(r, x, y, spr, air, stun, bob){
 }
 
 function drawCritter(r){
-  const x = r.x - camX, y = r.y;
+  const x = r.x - camX, y = r.y - (r._clusterLift||0);   // cluster stagger (render-only; shadow stays on ground)
   if (x>VW+80 || x<-80) return;
   const air = !r.onGround;
   const stun = r.stunT>0;
