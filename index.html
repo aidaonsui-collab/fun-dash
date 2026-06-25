@@ -166,6 +166,10 @@
   .ppl .pbase{ width:80px; border-radius:9px 9px 0 0; display:flex;align-items:flex-start;justify-content:center;
     font-weight:bold;font-size:28px;color:rgba(255,255,255,.85); padding-top:4px; box-shadow:inset 0 3px 0 rgba(255,255,255,.25) }
   /* ---- leaderboard ---- */
+  .lbTabs{ display:flex; gap:8px; justify-content:center; margin:2px 0 14px }
+  .lbTabBtn{ background:rgba(255,255,255,.07); color:var(--muted); border:1px solid rgba(255,255,255,.12); border-radius:999px; padding:7px 18px; font:inherit; font-weight:bold; font-size:14px; cursor:pointer; transition:all .15s }
+  .lbTabBtn:hover{ color:#fff; background:rgba(255,255,255,.13) }
+  .lbTabBtn.active{ background:var(--accent); color:#10131f; border-color:var(--accent) }
   .lbWrap{ display:flex; gap:16px; width:min(660px,95%); margin:8px auto; text-align:left; flex-wrap:wrap; justify-content:center }
   .lbStats{ background:rgba(255,255,255,.07); border-radius:14px; padding:14px 16px; min-width:200px }
   .lbStats .big{ font-size:26px;font-weight:bold;color:var(--accent); line-height:1 } .lbStats .biglbl{ font-size:12px;color:var(--muted);margin-bottom:8px }
@@ -212,6 +216,7 @@
         <div class="nameRow">👤 <input id="nameInput" maxlength="14" placeholder="Your name" autocomplete="off"></div>
         <div class="btnRow">
           <button class="btn" id="startBtn">RACE!</button>
+          <button class="btn ghost" id="freeBtn">⏱ Free Play</button>
           <button class="btn ghost sm" id="lbBtn">🏆 Leaderboard</button>
         </div>
         <div class="legend">
@@ -224,8 +229,8 @@
     <!-- map vote -->
     <div id="maplobby" class="overlay hidden">
       <div class="card">
-        <h1>VOTE <span class="a">MAP</span></h1>
-        <p class="sub">Pick your stage</p>
+        <h1 id="mapTitle">VOTE <span class="a">MAP</span></h1>
+        <p class="sub" id="mapSub">Pick your stage</p>
         <div class="maprow" id="maprow"></div>
         <div class="sub" id="lobbyTimer" style="margin-top:14px"></div>
       </div>
@@ -260,6 +265,10 @@
     <div id="leaderboard" class="overlay hidden">
       <div class="card">
         <h1>🏆 <span class="a">LEADERBOARD</span></h1>
+        <div class="lbTabs">
+          <button class="lbTabBtn active" data-tab="global">🌐 Global</button>
+          <button class="lbTabBtn" data-tab="best">⏱ Best Times</button>
+        </div>
         <div class="lbWrap">
           <div class="lbStats" id="lbStats"></div>
           <div class="lbList" id="lbList"></div>
@@ -359,6 +368,11 @@ function loadStats(){ let s={}; try{ s=JSON.parse(localStorage.getItem('fd_stats
   return Object.assign({games:0,wins:0,podiums:0,best:null,rating:0,streak:0}, s); }
 let stats = loadStats();
 let lastGain = 0;
+let gameMode = 'race';     // 'race' (rating) | 'freeplay' (time trial)
+let lbTab = 'global';      // leaderboard tab
+let lastBestImproved = false;
+let bestTimes = (function(){ try{ return JSON.parse(localStorage.getItem('fd_best'))||{}; }catch(e){ return {}; } })();
+function saveBest(){ try{ localStorage.setItem('fd_best', JSON.stringify(bestTimes)); }catch(e){} }
 function saveStats(){ try{ localStorage.setItem('fd_stats', JSON.stringify(stats)); }catch(e){} }
 function savePlayerName(n){ playerName=((n||'').trim().slice(0,14))||playerName; try{ localStorage.setItem('fd_name', playerName); }catch(e){} }
 
@@ -407,6 +421,27 @@ const THEME = {
     abyss:'#2a1a12', hillA:'#e8b889', hillB:'#d59a63',
     mid:'#c98a52', sun:'#fff2c0', glow:'#ffd49a', tuft:'#caa25f',
     ambient:'sand', sunMoon:'sun', decor:'cactus', grnd:'sand'},
+  neon: {name:'NEON CITY',
+    sky0:'#140a30', sky1:'#241552', sky2:'#4a2a82',
+    dirt:'#2a2440', dirt2:'#1e1a30', dirtLo:'#0e0a1c',
+    grass:'#ff3df0', grass2:'#b01fc8', grassLip:'#ff9cf5',
+    abyss:'#05030f', hillA:'#2e2456', hillB:'#221a42',
+    mid:'#352a62', sun:'#ff7de0', glow:'#36e6ff', tuft:'#36e6ff',
+    ambient:'neon', sunMoon:'moon', decor:'city', grnd:'moss'},
+  volcano: {name:'VOLCANO FORGE',
+    sky0:'#3a1410', sky1:'#641f14', sky2:'#b8431e',
+    dirt:'#3a2620', dirt2:'#281712', dirtLo:'#140a07',
+    grass:'#7a3a22', grass2:'#552414', grassLip:'#ff8a3a',
+    abyss:'#0a0402', hillA:'#4a201a', hillB:'#351510',
+    mid:'#3a1e16', sun:'#ffcaa0', glow:'#ff8a2a', tuft:'#ff7a2a',
+    ambient:'ember', sunMoon:'sun', decor:'volcano', grnd:'moss'},
+  swamp: {name:'TOXIC SWAMP',
+    sky0:'#14241a', sky1:'#234034', sky2:'#3e6450',
+    dirt:'#3a4a2e', dirt2:'#2a3622', dirtLo:'#161f12',
+    grass:'#7ed957', grass2:'#4caf3c', grassLip:'#c6ff8a',
+    abyss:'#06120a', hillA:'#2e4a32', hillB:'#21381f',
+    mid:'#284024', sun:'#caffaa', glow:'#9cff5a', tuft:'#9cff5a',
+    ambient:'spore', sunMoon:'moon', decor:'mushroom', grnd:'moss'},
 };
 const TIERS = [GROUND_Y, GROUND_Y-58, GROUND_Y-116, GROUND_Y-168, GROUND_Y-220];  // 5 ground heights (0 = lowest)
 
@@ -1013,6 +1048,9 @@ function drawDecor(T){
       case 'candy':   drawCandy(x,baseY,v,T); break;
       case 'pine':    drawPine(x,baseY,v,T); break;
       case 'cactus':  drawCactus(x,baseY,v,T); break;
+      case 'city':    drawCity(x,baseY,v,T); break;
+      case 'volcano': drawVolcano(x,baseY,v,T); break;
+      case 'mushroom':drawMushroom(x,baseY,v,T); break;
       default:        drawTree(x,baseY,v,T);
     }
   }
@@ -1085,12 +1123,52 @@ function drawCactus(x,y,v,T){
     ctx.fillStyle='#ffd24a'; ctx.beginPath(); ctx.arc(x-12,y-46,4,0,7); ctx.fill();
   }
 }
+function drawCity(x,y,v,T){
+  const defs = v===0?[[-26,150,32],[10,210,36]] : v===1?[[-30,190,42],[20,130,28]] : [[-18,250,48]];
+  for(const b of defs){
+    const bx=x+b[0], h=b[1], w=b[2];
+    const g=ctx.createLinearGradient(bx,y-h,bx,y); g.addColorStop(0,shade(T.hillA,0.12)); g.addColorStop(1,shade(T.hillB,-0.35));
+    ctx.fillStyle=g; ctx.fillRect(bx-w/2, y-h, w, h);
+    ctx.save(); ctx.globalCompositeOperation='lighter';
+    for(let wy=y-h+12; wy<y-12; wy+=16) for(let wx=bx-w/2+6; wx<bx+w/2-5; wx+=12){
+      if(rndAt(Math.round(bx*7+wy+wx),3)<0.42) continue;
+      ctx.fillStyle=rgba(rndAt(Math.round(bx+wy*3+wx),5)<0.5?T.glow:T.sun, 0.6); ctx.fillRect(wx, wy, 5, 7);
+    }
+    ctx.restore();
+    ctx.fillStyle=rgba(T.glow,0.85); ctx.fillRect(bx-w/2, y-h, w, 2);
+  }
+}
+function drawVolcano(x,y,v,T){
+  if(v===2){ ctx.save(); ctx.globalCompositeOperation='lighter';
+    const gl=ctx.createRadialGradient(x,y,0,x,y,72); gl.addColorStop(0,rgba(T.glow,0.5)); gl.addColorStop(1,rgba(T.glow,0));
+    ctx.fillStyle=gl; ctx.beginPath(); ctx.ellipse(x,y,72,16,0,0,7); ctx.fill(); ctx.restore(); return; }
+  const h=80+v*34, w=64+v*18;
+  const g=ctx.createLinearGradient(0,y-h,0,y); g.addColorStop(0,shade(T.hillA,0.06)); g.addColorStop(1,shade(T.hillB,-0.4));
+  ctx.fillStyle=g; ctx.beginPath(); ctx.moveTo(x-w/2,y); ctx.lineTo(x-w*0.18,y-h*0.7); ctx.lineTo(x,y-h); ctx.lineTo(x+w*0.2,y-h*0.66); ctx.lineTo(x+w/2,y); ctx.closePath(); ctx.fill();
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  ctx.strokeStyle=rgba(T.glow,0.8); ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(x,y-h*0.9); ctx.lineTo(x-6,y-h*0.5); ctx.lineTo(x+5,y-h*0.18); ctx.stroke();
+  const cg=ctx.createRadialGradient(x,y-h,0,x,y-h,18); cg.addColorStop(0,rgba(T.glow,0.95)); cg.addColorStop(1,rgba(T.glow,0));
+  ctx.fillStyle=cg; ctx.beginPath(); ctx.arc(x,y-h,18,0,7); ctx.fill(); ctx.restore();
+}
+function drawMushroom(x,y,v,T){
+  const h=42+v*22, R=22+v*9;
+  ctx.fillStyle=shade(T.hillA,0.12); roundRect(x-5,y-h,10,h,4); ctx.fill();
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  const gl=ctx.createRadialGradient(x,y-h,0,x,y-h,R*1.7); gl.addColorStop(0,rgba(T.glow,0.4)); gl.addColorStop(1,rgba(T.glow,0));
+  ctx.fillStyle=gl; ctx.beginPath(); ctx.arc(x,y-h,R*1.7,0,7); ctx.fill(); ctx.restore();
+  const g=ctx.createLinearGradient(0,y-h-R,0,y-h); g.addColorStop(0,shade(T.glow,0.25)); g.addColorStop(1,shade(T.glow,-0.4));
+  ctx.fillStyle=g; ctx.beginPath(); ctx.ellipse(x,y-h,R,R*0.72,0,Math.PI,2*Math.PI); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,0.6)'; for(const s of [[-8,-5],[7,-7],[11,-2]]){ ctx.beginPath(); ctx.arc(x+s[0],y-h+s[1],2.5,0,7); ctx.fill(); }
+}
 const AMB = {
   pollen:  {col:'255,244,180', n:28, vy:[-0.30,-0.08], vx:0.25, r:1.2, fall:false},
   sparkle: {col:'255,200,235', n:28, vy:[-0.30,-0.08], vx:0.25, r:1.2, fall:false},
   firefly: {col:'111,224,255', n:22, vy:[-0.20,-0.05], vx:0.30, r:1.6, fall:false},
   snow:    {col:'255,255,255', n:48, vy:[0.5,1.5],     vx:0.5,  r:1.7, fall:true},
   sand:    {col:'255,214,150', n:34, vy:[-0.10,0.10],  vx:-1.5, r:1.0, fall:false},
+  neon:    {col:'90,230,255',  n:26, vy:[-0.26,-0.05], vx:0.30, r:1.3, fall:false},
+  ember:   {col:'255,150,60',  n:32, vy:[-0.70,-0.22], vx:0.22, r:1.4, fall:false},
+  spore:   {col:'156,255,90',  n:24, vy:[-0.18,-0.04], vx:0.28, r:1.5, fall:false},
 };
 function initAmbient(theme){
   const T=THEME[theme]||THEME.hills, c=AMB[T.ambient]||AMB.pollen;
@@ -1644,22 +1722,33 @@ function showMapLobby(){
   hud.classList.add('hidden');
   document.getElementById('maplobby').classList.remove('hidden');
   state='maplobby';
-  lobbyThemes = Object.keys(THEME).sort(()=>Math.random()-0.5).slice(0,2);
+  const free = gameMode==='freeplay';
+  // Free Play = solo time trial → pick ANY of the 8 maps; Race = vote between 2 random maps
+  lobbyThemes = free ? Object.keys(THEME) : Object.keys(THEME).sort(()=>Math.random()-0.5).slice(0,2);
+  document.getElementById('mapTitle').innerHTML = free ? '⏱ <span class="a">FREE PLAY</span>' : 'VOTE <span class="a">MAP</span>';
+  document.getElementById('mapSub').textContent = free ? 'Pick a map to set your best time' : 'Pick your stage';
   const row = document.getElementById('maprow'); row.innerHTML='';
   lobbyThemes.forEach(tk=>{
     const T = THEME[tk];
+    const bt = bestTimes[tk];
     const card = document.createElement('div'); card.className='mapcard';
+    const label = free ? (bt!=null ? `best ${bt.toFixed(2)}s` : 'no time yet') : 'tap to race';
     card.innerHTML =
       `<div class="thumb" style="background:linear-gradient(${T.sky1},${T.sky2})">`+
         `<div style="position:absolute;left:0;right:0;bottom:0;height:32px;background:${T.dirt}"></div>`+
         `<div style="position:absolute;left:0;right:0;bottom:28px;height:7px;background:${T.grass}"></div>`+
         `<div style="position:absolute;left:62%;bottom:0;width:30px;height:24px;background:${T.abyss}"></div>`+
         `<div style="position:absolute;left:28%;bottom:40px;width:24px;height:24px;border-radius:5px;background:#e9a23b;color:#fff;font-weight:bold;text-align:center;line-height:24px;font-size:15px">?</div>`+
-      `</div><div class="nm">${T.name}</div><div class="vt">tap to race</div>`;
+      `</div><div class="nm">${T.name}</div><div class="vt">${label}</div>`;
     card.onclick = ()=>{ audioInit(); startGame(tk); };
     row.appendChild(card);
   });
-  let t = 5; const tEl = document.getElementById('lobbyTimer');
+  const tEl = document.getElementById('lobbyTimer');
+  if (free){
+    tEl.textContent = '🏃 Solo run vs 3 bots — beat your best!';
+    return;   // no auto-start in Free Play; player chooses the map
+  }
+  let t = 5;
   tEl.textContent = 'Auto-starting in '+t+'…';
   lobbyTimer = setInterval(()=>{
     t--;
@@ -1711,22 +1800,39 @@ function endRace(){
   const s = standings();
   const me = racers[0];
   const myPlace = s.indexOf(me)+1;
-  // --- update persistent stats + rating (with finish bonus + win streak) ---
+  // --- update persistent stats (both modes track games/wins/podiums/best) ---
   stats.games++;
   if (myPlace===1){ stats.wins++; stats.streak=(stats.streak||0)+1; } else { stats.streak=0; }
   if (myPlace<=3) stats.podiums++;
   if (me.finished && (stats.best===null || me.finishTime<stats.best)) stats.best=+me.finishTime.toFixed(2);
-  const placePts = [25,14,8,3][myPlace-1] || 1;
-  const finishBonus = me.finished ? 6 : 0;
-  const streakBonus = myPlace===1 ? (stats.streak-1)*6 : 0;       // each consecutive win is worth more
-  lastGain = placePts + finishBonus + streakBonus;
-  stats.rating += lastGain;
+  // per-map best time (Free Play is the time-trial mode, but Race counts too)
+  lastBestImproved = false;
+  if (me.finished){
+    const prev = bestTimes[track.theme];
+    if (prev===undefined || me.finishTime < prev){ bestTimes[track.theme]=+me.finishTime.toFixed(2); lastBestImproved=true; saveBest(); }
+  }
+  // rating only moves in Race mode — Free Play is a pure time trial
+  if (gameMode==='race'){
+    const placePts = [25,14,8,3][myPlace-1] || 1;
+    const finishBonus = me.finished ? 6 : 0;
+    const streakBonus = myPlace===1 ? (stats.streak-1)*6 : 0;       // each consecutive win is worth more
+    lastGain = placePts + finishBonus + streakBonus;
+    stats.rating += lastGain;
+  } else { lastGain = 0; }
   saveStats();
   // --- title ---
   document.getElementById('resultTitle').innerHTML =
-    myPlace===1 ? '🏆 YOU WIN!' : (myPlace===racers.length? 'LAST… 😵' : `${ordinal(myPlace)} place!`);
-  document.getElementById('ratingGain').textContent =
-    '+'+lastGain+' rating' + (stats.streak>1 ? `  ·  🔥 ${stats.streak} win streak!` : '');
+    gameMode==='freeplay' ? (me.finished?'⏱ TIME TRIAL':'DNF 😵')
+    : (myPlace===1 ? '🏆 YOU WIN!' : (myPlace===racers.length? 'LAST… 😵' : `${ordinal(myPlace)} place!`));
+  const gainBits = [];
+  if (gameMode==='race'){
+    gainBits.push('+'+lastGain+' rating');
+    if (stats.streak>1) gainBits.push(`🔥 ${stats.streak} win streak!`);
+  } else if (me.finished){
+    gainBits.push(`⏱ ${me.finishTime.toFixed(2)}s on ${THEME[track.theme].name}`);
+  }
+  if (lastBestImproved) gainBits.push(`🏁 NEW BEST!`);
+  document.getElementById('ratingGain').textContent = gainBits.join('  ·  ');
   // --- podium: top 3 (render order 2nd · 1st · 3rd so 1st is centre & tallest) ---
   const cols=[[1,112,'#9fb0c8'],[0,150,'#ffd24a'],[2,84,'#cd8e54']];
   const pod=document.getElementById('podium'); pod.innerHTML='';
@@ -1763,11 +1869,27 @@ function renderLeaderboard(){
     `<div class="row"><span>Podiums</span><b>${stats.podiums}</b></div>`+
     `<div class="row"><span>Win streak</span><b>${stats.streak||0}${stats.streak>1?' 🔥':''}</b></div>`+
     `<div class="row"><span>Best time</span><b>${stats.best!=null?stats.best+'s':'—'}</b></div>`;
+  const list=document.getElementById('lbList'); list.innerHTML='';
+  // ----- BEST TIMES tab: your fastest finish per map (Free Play feeds this) -----
+  if (lbTab==='best'){
+    const rows = Object.keys(THEME).map(k=>({name:THEME[k].name, t:bestTimes[k]}));
+    rows.sort((a,b)=> (a.t==null?Infinity:a.t) - (b.t==null?Infinity:b.t));
+    const fastest = rows.reduce((m,r)=> r.t!=null && r.t<m ? r.t : m, Infinity);
+    rows.forEach((r,i)=>{
+      const has = r.t!=null;
+      const row=document.createElement('div'); row.className='lbRow'+(has&&r.t===fastest?' top3':'');
+      if(!has) row.style.opacity='.45';
+      row.innerHTML=`<span class="rk">${has?i+1:'–'}</span><span class="nm">${esc(r.name)}${has&&r.t===fastest?' 🏁':''}</span>`+
+        `<span class="sc">${has?r.t.toFixed(2)+'s':'—'}</span>`;
+      list.appendChild(row);
+    });
+    return;
+  }
+  // ----- GLOBAL tab: rating ladder (seeded) -----
   const all = SEED_BOARD.map(e=>({name:e[0], sc:e[1], me:false}));
   all.push({name:playerName, sc:stats.rating, me:true});
   all.sort((a,b)=>b.sc-a.sc);
   const myRank = all.findIndex(e=>e.me)+1;
-  const list=document.getElementById('lbList'); list.innerHTML='';
   const pin=document.createElement('div'); pin.className='lbRow pin';
   pin.innerHTML=`<span class="rk">#${myRank}</span><span class="nm">${esc(playerName)} (you)</span><span class="sc">${stats.rating.toLocaleString()}</span>`;
   list.appendChild(pin);
@@ -1874,12 +1996,18 @@ nameInput.value=playerName;
 nameInput.addEventListener('input', ()=>savePlayerName(nameInput.value));
 nameInput.addEventListener('change', ()=>{ nameInput.value=playerName; });
 // buttons
-document.getElementById('startBtn').onclick=()=>{ audioInit(); savePlayerName(nameInput.value); showMapLobby(); };
+document.getElementById('startBtn').onclick=()=>{ audioInit(); savePlayerName(nameInput.value); gameMode='race'; showMapLobby(); };
+document.getElementById('freeBtn').onclick=()=>{ audioInit(); savePlayerName(nameInput.value); gameMode='freeplay'; showMapLobby(); };
 document.getElementById('againBtn').onclick=()=>{ showMapLobby(); };
 document.getElementById('lbBtn').onclick=()=>showLeaderboard();
 document.getElementById('lbBtn2').onclick=()=>showLeaderboard();
 document.getElementById('shareBtn').onclick=()=>{ audioInit(); shareToX(); };
 document.getElementById('lbBack').onclick=()=>document.getElementById('leaderboard').classList.add('hidden');
+document.querySelectorAll('.lbTabBtn').forEach(b=>b.onclick=()=>{
+  lbTab=b.dataset.tab;
+  document.querySelectorAll('.lbTabBtn').forEach(x=>x.classList.toggle('active', x===b));
+  renderLeaderboard();
+});
 document.getElementById('menuBtn').onclick=()=>showMenu();
 
 //------------------------------------------------------------------
