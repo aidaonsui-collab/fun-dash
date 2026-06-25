@@ -150,6 +150,11 @@
     background:rgba(0,0,0,.3); border:2px solid rgba(255,255,255,.18); border-radius:10px; padding:8px 12px; width:190px; outline:none }
   .nameRow input:focus{ border-color:var(--accent) }
   .btnRow{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:4px }
+  .suiStatus{ color:var(--muted); font-size:13px; margin:8px 0; min-height:16px }
+  .suiAddr{ font-family:ui-monospace,Menlo,monospace; font-size:13px; color:#cfd6f0; background:rgba(255,255,255,.07); padding:6px 12px; border-radius:8px; display:inline-block }
+  .suiBal{ color:var(--accent); font-weight:bold; font-size:15px; margin-top:8px }
+  .suiProg{ color:#cfd6f0; font-size:13px; margin:12px auto; white-space:pre-line; min-height:18px; max-width:90% }
+  .suiResult{ font-size:15px; font-weight:bold; margin:12px auto; padding:12px 16px; border-radius:12px; background:rgba(255,255,255,.08); max-width:92% }
   .btn.ghost{ background:rgba(255,255,255,.12); color:#fff; box-shadow:0 5px 0 rgba(0,0,0,.32), 0 8px 16px rgba(0,0,0,.3) }
   .btn.ghost:active{ transform:translateY(4px); box-shadow:0 1px 0 rgba(0,0,0,.32) }
   .btn.sm{ padding:10px 20px; font-size:16px }
@@ -224,6 +229,7 @@
         <div class="btnRow">
           <button class="btn" id="startBtn">RACE!</button>
           <button class="btn ghost" id="freeBtn">⏱ Free Play</button>
+          <button class="btn ghost sm" id="suiBtn">⛓️ SUI Race</button>
           <button class="btn ghost sm" id="lbBtn">🏆 Leaderboard</button>
         </div>
         <div class="legend">
@@ -281,6 +287,29 @@
           <div class="lbList" id="lbList"></div>
         </div>
         <button class="btn ghost" id="lbBack">BACK</button>
+      </div>
+    </div>
+
+    <!-- ⛓️ SUI Race (testnet) -->
+    <div id="suipanel" class="overlay hidden">
+      <div class="card">
+        <h1>⛓️ <span class="a">SUI RACE</span></h1>
+        <p class="sub">Stake testnet SUI · winner takes the pot − 10% fee · <b>TESTNET</b></p>
+        <div id="suiStatus" class="suiStatus"></div>
+        <button class="btn" id="suiConnect">Connect Wallet</button>
+        <div id="suiWallet" class="hidden">
+          <div class="suiAddr" id="suiAddr"></div>
+          <div class="suiBal" id="suiBal"></div>
+          <p class="sub" style="margin:12px 0 6px">Pick your stake — you race the house, winner takes both:</p>
+          <div class="btnRow" id="suiTiers">
+            <button class="btn ghost sm" data-stake="0.1">0.1 SUI</button>
+            <button class="btn ghost sm" data-stake="0.5">0.5 SUI</button>
+            <button class="btn ghost sm" data-stake="1">1 SUI</button>
+          </div>
+        </div>
+        <div id="suiProgress" class="suiProg hidden"></div>
+        <div id="suiResult" class="suiResult hidden"></div>
+        <button class="btn ghost" id="suiBack" style="margin-top:14px">BACK</button>
       </div>
     </div>
   </div>
@@ -396,7 +425,8 @@ function loadStats(){ let s={}; try{ s=JSON.parse(localStorage.getItem('fd_stats
   return Object.assign({games:0,wins:0,podiums:0,best:null,rating:0,streak:0}, s); }
 let stats = loadStats();
 let lastGain = 0;
-let gameMode = 'race';     // 'race' (rating) | 'freeplay' (time trial)
+let gameMode = 'race';     // 'race' (rating) | 'freeplay' (time trial) | 'sui' (on-chain stake)
+let suiRace = null;        // active on-chain staked race {roomId, houseAddr, stake, settled}
 let lbTab = 'global';      // leaderboard tab
 let lastBestImproved = false;
 let bestTimes = (function(){ try{ return JSON.parse(localStorage.getItem('fd_best'))||{}; }catch(e){ return {}; } })();
@@ -1892,6 +1922,7 @@ function updateItemSlot(){
 // ----- map vote lobby -----
 let lobbyTimer = null, lobbyThemes = [];
 function showMapLobby(){
+  if (gameMode==='sui'){ gameMode='race'; suiRace=null; }   // leaving a SUI race → normal play
   if (lobbyTimer){ clearInterval(lobbyTimer); lobbyTimer=null; }
   document.getElementById('menu').classList.add('hidden');
   document.getElementById('results').classList.add('hidden');
@@ -2011,6 +2042,8 @@ function endRace(){
   }
   if (lastBestImproved) gainBits.push(`🏁 NEW BEST!`);
   document.getElementById('ratingGain').textContent = gainBits.join('  ·  ');
+  // --- on-chain settlement for a SUI staked race ---
+  if (gameMode==='sui' && suiRace && !suiRace.settled){ settleSuiRace(myPlace===1); }
   // --- podium: top 3 (render order 2nd · 1st · 3rd so 1st is centre & tallest) ---
   const cols=[[1,112,'#9fb0c8'],[0,150,'#ffd24a'],[2,84,'#cd8e54']];
   const pod=document.getElementById('podium'); pod.innerHTML='';
@@ -2090,8 +2123,9 @@ function shareToX(){
   window.open('https://twitter.com/intent/tweet?text='+encodeURIComponent(txt), '_blank', 'noopener');
 }
 function showMenu(){
-  ['maplobby','lobby','results','leaderboard','countdown'].forEach(id=>document.getElementById(id).classList.add('hidden'));
+  ['maplobby','lobby','results','leaderboard','countdown','suipanel'].forEach(id=>document.getElementById(id).classList.add('hidden'));
   hud.classList.add('hidden'); document.getElementById('menu').classList.remove('hidden'); state='menu';
+  if (gameMode==='sui'){ gameMode='race'; suiRace=null; }
   stopMusic();
 }
 function esc(s){ return String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
@@ -2193,6 +2227,67 @@ document.querySelectorAll('.lbTabBtn').forEach(b=>b.onclick=()=>{
 })();
 document.getElementById('menuBtn').onclick=()=>showMenu();
 
+// ---- ⛓️ SUI Race (on-chain staking, testnet) ----
+const $sui = (id)=>document.getElementById(id);
+async function refreshSuiWallet(){
+  const a = window.FunSui.address; if(!a) return;
+  $sui('suiWallet').classList.remove('hidden');
+  $sui('suiAddr').textContent = a.slice(0,8)+'…'+a.slice(-6);
+  $sui('suiBal').textContent = 'Balance: …';
+  try{ const b = await window.FunSui.getBalance(); $sui('suiBal').textContent = 'Balance: '+window.FunSui.mist2sui(b).toFixed(3)+' SUI (testnet)'; }
+  catch(e){ $sui('suiBal').textContent = 'Balance: ?'; }
+}
+async function showSui(){
+  audioInit(); savePlayerName(nameInput.value);
+  ['menu','maplobby','lobby','results','leaderboard','countdown'].forEach(id=>$sui(id).classList.add('hidden'));
+  hud.classList.add('hidden'); $sui('suipanel').classList.remove('hidden'); state='sui';
+  $sui('suiWallet').classList.add('hidden'); $sui('suiProgress').classList.add('hidden'); $sui('suiResult').classList.add('hidden');
+  const status=$sui('suiStatus'), connectBtn=$sui('suiConnect'); connectBtn.disabled=false;
+  if(!window.FunSui){ status.textContent='Loading on-chain module…'; connectBtn.classList.add('hidden');
+    await new Promise(r=>{ if(window.FunSui) return r(); window.addEventListener('funsui-ready', r, {once:true}); setTimeout(r,6000); }); }
+  if(!window.FunSui){ status.textContent='⚠️ On-chain module failed to load — check your connection and reopen.'; return; }
+  if(!window.FunSui.hasWallet()){
+    status.innerHTML='No Sui wallet detected. Install <b>Slush</b> / Sui Wallet, switch it to <b>Testnet</b>, then reopen.';
+    connectBtn.classList.add('hidden'); return;
+  }
+  if(window.FunSui.address){ status.textContent='Connected ✓'; connectBtn.classList.add('hidden'); refreshSuiWallet(); }
+  else { status.textContent='Connect your Sui wallet (Testnet) to stake.'; connectBtn.classList.remove('hidden'); }
+}
+async function settleSuiRace(won){
+  suiRace.settled = true;
+  const el = $sui('ratingGain'); el.textContent = '⛓️ Settling on-chain…';
+  try{
+    await window.FunSui.settle(suiRace.roomId, won ? window.FunSui.address : suiRace.houseAddr);
+    const pot = suiRace.stake*2, payout = pot*0.9;
+    el.textContent = won ? `⛓️ 🏆 Winner paid ${payout.toFixed(3)} SUI on-chain (pot ${pot} − 10% fee → dev)`
+                         : `⛓️ 😵 House took the pot — ${payout.toFixed(3)} SUI; 10% fee → dev`;
+  }catch(e){ el.textContent = '⛓️ ⚠️ Settle failed: '+(e.message||e); }
+}
+$sui('suiBtn').onclick = ()=>showSui();
+$sui('suiBack').onclick = ()=>{ $sui('suipanel').classList.add('hidden'); gameMode='race'; suiRace=null; showMenu(); };
+$sui('suiConnect').onclick = async ()=>{
+  const status=$sui('suiStatus'), btn=$sui('suiConnect'); btn.disabled=true; status.textContent='Connecting…';
+  try{ await window.FunSui.connect(); status.textContent='Connected ✓'; btn.classList.add('hidden'); await refreshSuiWallet(); }
+  catch(e){ status.textContent='⚠️ '+(e.message||e); btn.disabled=false; }
+};
+$sui('suiTiers').addEventListener('click', async (e)=>{
+  const b=e.target.closest('button[data-stake]'); if(!b) return;
+  const stake=parseFloat(b.dataset.stake);
+  const prog=$sui('suiProgress'); $sui('suiWallet').classList.add('hidden'); $sui('suiResult').classList.add('hidden');
+  prog.classList.remove('hidden'); prog.textContent='Preparing…';
+  try{
+    const r = await window.FunSui.playStaked(stake, (m)=>{ prog.textContent=m; });
+    suiRace = { roomId:r.roomId, houseAddr:r.houseAddr, stake, settled:false };
+    gameMode = 'sui';
+    prog.textContent = '✓ Staked '+stake+' SUI — GO!';
+    $sui('suipanel').classList.add('hidden');
+    startGame();   // random map, vs bots; endRace settles the escrow on-chain
+  }catch(err){
+    prog.textContent = '⚠️ '+(err.message||err)+'\n(Only gas was spent; try again.)';
+    setTimeout(()=>{ prog.classList.add('hidden'); $sui('suiWallet').classList.remove('hidden'); refreshSuiWallet(); }, 1500);
+  }
+});
+
 //------------------------------------------------------------------
 //  MINI SFX (WebAudio, optional)
 //------------------------------------------------------------------
@@ -2283,6 +2378,124 @@ function roundRect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w
 
 // boot
 requestAnimationFrame(frame);
+</script>
+
+<!-- ───────────────────────── SUI on-chain layer (Phase 0, TESTNET) ─────────────────────────
+     Loads @mysten/sui + wallet-standard via ESM and exposes window.FunSui. Activates only when
+     the player opens "SUI Race"; the rest of the game runs with zero crypto deps. -->
+<script type="module">
+import { SuiClient, getFullnodeUrl } from 'https://esm.sh/@mysten/sui@1.24.0/client';
+import { Transaction } from 'https://esm.sh/@mysten/sui@1.24.0/transactions';
+import { Ed25519Keypair } from 'https://esm.sh/@mysten/sui@1.24.0/keypairs/ed25519';
+import { getWallets } from 'https://esm.sh/@wallet-standard/app@1.1.0';
+
+const NET = 'testnet';
+const PKG    = '0xb466991c2027c7238002fcc6fd52a7f5e4f60bf34c7ad06e8047a695439a0d52';
+const CONFIG = '0x3b76b160d5ed84e25db5350c8bf83bbbddc613fd87b82f11c939dc869a94944b';
+const MIST = 1_000_000_000n;
+const client = new SuiClient({ url: getFullnodeUrl(NET) });
+
+const S = { ready:true, net:NET, address:null, wallet:null, account:null };
+const sui2mist = (s) => BigInt(Math.round(Number(s) * 1e9));
+const mist2sui = (m) => (Number(m) / 1e9);
+
+// ---- wallet (wallet-standard; works with Slush/Sui Wallet/Suiet/etc.) ----
+function findWallet(){
+  const all = getWallets().get();
+  return all.find(w => w.chains?.some(c=>c.startsWith('sui:')) &&
+    (w.features['sui:signAndExecuteTransaction'] || w.features['sui:signTransaction'] || w.features['sui:signAndExecuteTransactionBlock']));
+}
+async function connect(){
+  const w = findWallet();
+  if (!w) throw new Error('No Sui wallet found. Install Slush / Sui Wallet and set it to Testnet.');
+  await w.features['standard:connect'].connect();
+  const acc = w.accounts[0];
+  if (!acc) throw new Error('Wallet connected but no account is available.');
+  S.wallet = w; S.account = acc; S.address = acc.address;
+  return S.address;
+}
+// sign + execute a Transaction with the connected wallet (modern feature, legacy fallback)
+async function walletExec(tx){
+  tx.setSenderIfNotSet(S.address);
+  const chain = `sui:${NET}`;
+  const f = S.wallet.features;
+  if (f['sui:signAndExecuteTransaction']){
+    const r = await f['sui:signAndExecuteTransaction'].signAndExecuteTransaction(
+      { transaction: tx, account: S.account, chain });
+    await client.waitForTransaction({ digest: r.digest });
+    return await client.getTransactionBlock({ digest: r.digest, options:{ showEffects:true, showObjectChanges:true } });
+  }
+  // legacy: sign locally then execute
+  const f2 = f['sui:signTransaction'] || f['sui:signTransactionBlock'];
+  const built = await tx.toJSON();
+  const signed = await (f['sui:signTransaction']
+    ? f['sui:signTransaction'].signTransaction({ transaction: tx, account: S.account, chain })
+    : f['sui:signTransactionBlock'].signTransactionBlock({ transactionBlock: tx, account: S.account, chain }));
+  const r = await client.executeTransactionBlock({
+    transactionBlock: signed.bytes ?? built, signature: signed.signature,
+    options:{ showEffects:true, showObjectChanges:true } });
+  await client.waitForTransaction({ digest: r.digest });
+  return r;
+}
+async function keyExec(kp, tx){            // sign+execute with an in-page (house) keypair
+  tx.setSenderIfNotSet(kp.toSuiAddress()); tx.setGasBudgetIfNotSet?.(50_000_000);
+  const r = await client.signAndExecuteTransaction({ signer:kp, transaction:tx,
+    options:{ showEffects:true, showObjectChanges:true } });
+  await client.waitForTransaction({ digest: r.digest });
+  if (r.effects?.status?.status !== 'success') throw new Error('house tx failed: '+JSON.stringify(r.effects?.status));
+  return r;
+}
+
+// ---- reads ----
+async function getConfig(){
+  const o = await client.getObject({ id: CONFIG, options:{ showContent:true } });
+  const f = o.data.content.fields;
+  return { feeBps: Number(f.platform_fee_bps), treasury: f.treasury, operator: f.operator };
+}
+async function getBalance(addr){ return BigInt((await client.getBalance({ owner: addr||S.address })).totalBalance); }
+
+// ---- tx builders (match the deployed race module) ----
+const txCreate = (entryMist) => { const t=new Transaction();
+  t.moveCall({ target:`${PKG}::race::create_race`, arguments:[t.object(CONFIG), t.pure.u64(entryMist), t.pure.u64(2)] }); return t; };
+const txJoin = (room, entryMist) => { const t=new Transaction();
+  const [c]=t.splitCoins(t.gas,[t.pure.u64(entryMist)]); t.moveCall({ target:`${PKG}::race::join_race`, arguments:[t.object(room), c] }); return t; };
+const txStart = (room) => { const t=new Transaction(); t.moveCall({ target:`${PKG}::race::start_race`, arguments:[t.object(CONFIG), t.object(room)] }); return t; };
+const txFinish = (room, winner) => { const t=new Transaction(); t.moveCall({ target:`${PKG}::race::finish_race`, arguments:[t.object(CONFIG), t.object(room), t.pure.address(winner)] }); return t; };
+const roomIdFrom = (res) => (res.objectChanges||[]).find(c=>c.type==='created' && c.objectType?.endsWith('::race::RaceRoom'))?.objectId;
+
+// ---- Phase-0 staked race: you (wallet) vs an in-page "house" opponent, settled on-chain ----
+// Returns { roomId, houseAddr, kp }. The 2-player contract minimum is met by the house keypair,
+// which the wallet funds in the same flow (testnet only).
+async function playStaked(entrySui, step=()=>{}){
+  if (!S.address) await connect();
+  const entry = sui2mist(entrySui);
+  step('Creating race room…');
+  const created = await walletExec(txCreate(entry));
+  const room = roomIdFrom(created);
+  if (!room) throw new Error('could not find created RaceRoom');
+  step('Staking your entry into escrow…');
+  await walletExec(txJoin(room, entry));
+  // fund + join the house opponent (ephemeral keypair) so the race can start (min 2 players)
+  const kp = new Ed25519Keypair(); const houseAddr = kp.toSuiAddress();
+  step('Funding the house opponent…');
+  const ft = new Transaction(); const [coin] = ft.splitCoins(ft.gas, [ft.pure.u64(entry + 60_000_000n)]);
+  ft.transferObjects([coin], ft.pure.address(houseAddr)); await walletExec(ft);
+  step('House staking its entry…');
+  await keyExec(kp, txJoin(room, entry));
+  step('Starting the race on-chain…');
+  await walletExec(txStart(room));
+  return { roomId: room, houseAddr, kp };
+}
+async function settle(roomId, winnerAddr, step=()=>{}){
+  step('Settling on-chain (winner takes pot − 10%)…');
+  const res = await walletExec(txFinish(roomId, winnerAddr));
+  const room = await client.getObject({ id: roomId, options:{ showContent:true } });
+  return { digest: res.digest, fields: room.data?.content?.fields };
+}
+
+window.FunSui = { ...S, connect, getConfig, getBalance, playStaked, settle,
+  sui2mist, mist2sui, PKG, CONFIG, NET, get address(){ return S.address; }, hasWallet:()=>!!findWallet() };
+window.dispatchEvent(new Event('funsui-ready'));
 </script>
 </body>
 </html>
