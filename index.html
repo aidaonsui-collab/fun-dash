@@ -1452,9 +1452,25 @@ function drawSprite(r, x, y, spr, air, stun, bob){
     if (air){ const v=Math.max(-1,Math.min(1,-r.vy/620)); sy=1+v*0.22; sx=1/sy; }
     if (r.landT>0){ const k=r.landT/0.16; sy*=1-0.30*k; sx*=1+0.30*k; }   // landing squash
     if (r.popT>0){  const k=r.popT/0.25; sx*=1+0.18*k; sy*=1+0.18*k; }    // pickup pop
+    // ---- procedural run-cycle on the ground: a bouncy 2-beat gait that reads as
+    //      running legs even though the sprite is one still frame (real strips, if
+    //      ever supplied via SHEET, carry their own motion so we skip this for them) ----
+    let runLift = 0, lean = (r.boostT>0 ? 0.13 : 0);
+    if (air){
+      lean += -0.16;                                  // tuck forward in the air
+    } else if (!stripReady){
+      const p = r.runPhase;
+      const flight = Math.abs(Math.sin(p));           // 0 at each footfall, 1 mid-stride
+      const land   = 1 - flight;                      // 1 at footfall
+      runLift = -flight * 5.5;                         // body floats up between steps
+      sx *= 1 + 0.12*land;  sy *= 1 - 0.12*land;       // squat/compress on each foot strike
+      lean += 0.05 + Math.sin(p) * 0.06;              // slight forward lean that pulses with the gait
+    } else {
+      lean += Math.sin(r.runPhase) * 0.06;
+    }
     ctx.save();
-    ctx.translate(x, y + bob);
-    ctx.rotate((air ? -0.16 : Math.sin(r.runPhase)*0.06) + (r.boostT>0?0.13:0));
+    ctx.translate(x, y + bob + runLift);
+    ctx.rotate(lean);
     ctx.scale(sx, sy);
     if (stripReady && !air){
       const fr=sheet.frames; let idx=Math.floor(r.runPhase/(Math.PI*2)*fr); idx=((idx%fr)+fr)%fr;
