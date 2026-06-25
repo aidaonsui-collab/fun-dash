@@ -1,0 +1,16 @@
+{
+  "name": "fun-dash-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Fun Dash realtime PvP server — authoritative race sim + on-chain settlement (Phase 1)",
+  "type": "commonjs",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node test-clients.mjs"
+  },
+  "dependencies": {
+    "ws": "^8.18.0",
+    "@mysten/sui": "^1.24.0"
+  }
+}

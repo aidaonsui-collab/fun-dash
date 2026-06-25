@@ -229,6 +229,7 @@
         <div class="btnRow">
           <button class="btn" id="startBtn">RACE!</button>
           <button class="btn ghost" id="freeBtn">⏱ Free Play</button>
+          <button class="btn ghost sm" id="netBtn">🌐 Online PvP</button>
           <button class="btn ghost sm" id="suiBtn">⛓️ SUI Race</button>
           <button class="btn ghost sm" id="lbBtn">🏆 Leaderboard</button>
         </div>
@@ -310,6 +311,27 @@
         <div id="suiProgress" class="suiProg hidden"></div>
         <div id="suiResult" class="suiResult hidden"></div>
         <button class="btn ghost" id="suiBack" style="margin-top:14px">BACK</button>
+      </div>
+    </div>
+
+    <!-- 🌐 Online PvP (server-authoritative realtime) -->
+    <div id="netpanel" class="overlay hidden">
+      <div class="card">
+        <h1>🌐 <span class="a">ONLINE PvP</span></h1>
+        <p class="sub">Real-time racing vs real players · the server runs the race, so wins can't be faked</p>
+        <div id="netStatus" class="suiStatus"></div>
+        <div id="netModes">
+          <button class="btn" id="netCasual">⚡ Quick Match</button>
+          <p class="sub" style="margin:14px 0 6px">Staked PvP — both players stake, winner takes pot − 10% · <b>TESTNET</b>:</p>
+          <div class="btnRow" id="netTiers">
+            <button class="btn ghost sm" data-stake="0.1">0.1 SUI</button>
+            <button class="btn ghost sm" data-stake="0.5">0.5 SUI</button>
+            <button class="btn ghost sm" data-stake="1">1 SUI</button>
+          </div>
+        </div>
+        <div id="netProgress" class="suiProg hidden"></div>
+        <button class="btn ghost sm" id="netCancel" style="margin-top:14px;display:none">CANCEL</button>
+        <button class="btn ghost" id="netBack" style="margin-top:14px">BACK</button>
       </div>
     </div>
   </div>
@@ -1968,6 +1990,7 @@ function showMapLobby(){
 let lobbyCD = null;
 function startGame(theme){
   if (lobbyTimer){ clearInterval(lobbyTimer); lobbyTimer=null; }
+  lastWasOnline=false;
   forcedTheme = theme || null;
   resetRace();
   showLobby(theme || track.theme);
@@ -2123,9 +2146,12 @@ function shareToX(){
   window.open('https://twitter.com/intent/tweet?text='+encodeURIComponent(txt), '_blank', 'noopener');
 }
 function showMenu(){
-  ['maplobby','lobby','results','leaderboard','countdown','suipanel'].forEach(id=>document.getElementById(id).classList.add('hidden'));
+  ['maplobby','lobby','results','leaderboard','countdown','suipanel','netpanel'].forEach(id=>document.getElementById(id).classList.add('hidden'));
   hud.classList.add('hidden'); document.getElementById('menu').classList.remove('hidden'); state='menu';
   if (gameMode==='sui'){ gameMode='race'; suiRace=null; }
+  if (online || net){ leaveNet(); }
+  if (gameMode==='online') gameMode='race';
+  lastWasOnline=false;
   stopMusic();
 }
 function esc(s){ return String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
@@ -2135,6 +2161,11 @@ function esc(s){ return String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;'
 //------------------------------------------------------------------
 function frame(ts){
   const dt = Math.min(0.033, (ts-lastTs)/1000 || 0); lastTs=ts;
+  if (online){                       // server-authoritative: interpolate snapshots, no local sim
+    if (state==='racing') netStep(dt);
+    render();
+    requestAnimationFrame(frame); return;
+  }
   if (state==='countdown'){
     countdownT -= dt;
     const n = Math.ceil(countdownT);
@@ -2159,6 +2190,7 @@ function drawCountdownDim(){ /* dim handled by overlay div */ }
 //  INPUT
 //------------------------------------------------------------------
 function playerJump(){
+  if (online){ if (state==='racing'){ sendNet({t:'input'}); sfx('jump'); } return; }   // server applies the jump
   if (state!=='racing') return;
   const me=racers[0]; if (me.finished || me.stunT>0) return;
   if (me.onGround){ me.vy=-JUMP_V; me.onGround=false; me.jumps=1; sfx('jump'); }
@@ -2211,7 +2243,7 @@ nameInput.addEventListener('change', ()=>{ nameInput.value=playerName; });
 // buttons
 document.getElementById('startBtn').onclick=()=>{ audioInit(); savePlayerName(nameInput.value); gameMode='race'; showMapLobby(); };
 document.getElementById('freeBtn').onclick=()=>{ audioInit(); savePlayerName(nameInput.value); gameMode='freeplay'; showMapLobby(); };
-document.getElementById('againBtn').onclick=()=>{ showMapLobby(); };
+document.getElementById('againBtn').onclick=()=>{ if(lastWasOnline){ showNet(); } else { showMapLobby(); } };
 document.getElementById('lbBtn').onclick=()=>showLeaderboard();
 document.getElementById('lbBtn2').onclick=()=>showLeaderboard();
 document.getElementById('shareBtn').onclick=()=>{ audioInit(); shareToX(); };
@@ -2376,6 +2408,179 @@ function clamp(v,a,b){ return v<a?a:v>b?b:v; }
 function ordinal(n){ return n+ (['th','st','nd','rd'][(n%100>>3^1)&&n%10] || 'th'); }
 function roundRect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
 
+//------------------------------------------------------------------
+//  🌐 ONLINE PvP (Phase 1) — connect to the authoritative game server,
+//  render its snapshots, and send only jump inputs. The server decides
+//  positions + the winner (and settles staked rooms on-chain as operator).
+//------------------------------------------------------------------
+const NET_URL = new URLSearchParams(location.search).get('server')
+  || ('ws://' + (location.hostname || 'localhost') + ':8125');
+let net=null, online=false, myNetId=null, netById={}, netStake=0, lastWasOnline=false, netGotSnap=false;
+const $net = (id)=>document.getElementById(id);
+function sendNet(m){ try{ if(net && net.readyState===1) net.send(JSON.stringify(m)); }catch(e){} }
+function netProg(msg){ const p=$net('netProgress'); p.classList.remove('hidden'); p.textContent=msg; }
+
+function connectNet(){
+  return new Promise((resolve,reject)=>{
+    if (net && net.readyState===1){ resolve(); return; }
+    try{ net = new WebSocket(NET_URL); }catch(e){ reject(e); return; }
+    net.onopen = ()=>{ sendNet({t:'hello', name:playerName, char:chosenChar, addr: window.FunSui&&window.FunSui.address}); resolve(); };
+    net.onerror = ()=>{ reject(new Error('cannot reach the game server')); };
+    net.onclose = ()=>{ if(state==='net'){ $net('netStatus').textContent='⚠️ Disconnected from server.'; } };
+    net.onmessage = (ev)=>{ let m; try{ m=JSON.parse(ev.data); }catch(e){ return; } onNetMsg(m); };
+  });
+}
+
+async function onNetMsg(m){
+  switch(m.t){
+    case 'welcome': myNetId = m.id; break;   // a human's racer id == its client id
+    case 'queued': netProg(m.mode==='staked'
+      ? `Staked ${m.stake} SUI · waiting for an opponent… (${m.n} in queue)`
+      : `Finding a match… (${m.n} player${m.n>1?'s':''} ready)`); break;
+    case 'you': myNetId = m.id;              // re-mark if the match was built before this arrived
+      if (racers && racers.length){ let changed=false;
+        for (const r of racers){ const ip=r.netId===myNetId; if(ip!==r.isPlayer){ r.isPlayer=ip; changed=true; } }
+        if (changed){ racers.sort((a,b)=>(b.isPlayer?1:0)-(a.isPlayer?1:0)); buildPips(); } }
+      break;
+    case 'stake_wait': netProg('Opponent found! Waiting for host to open the room…'); break;
+    case 'stake_host':
+      netProg('Opponent found! Creating the staked room on-chain…');
+      try{ const room = await window.FunSui.createStakedRoom(netStake); sendNet({t:'staked_room', room});
+           netProg('Room created + staked. Waiting for your opponent to stake…'); }
+      catch(e){ netProg('⚠️ '+(e.message||e)); sendNet({t:'cancel'}); netShowModes(); }
+      break;
+    case 'stake_join':
+      netProg('Opponent ready! Staking into the shared room…');
+      try{ await window.FunSui.joinStakedRoom(m.room, m.stake); sendNet({t:'staked_joined'});
+           netProg('Staked ✓ — verifying escrow & starting…'); }
+      catch(e){ netProg('⚠️ '+(e.message||e)); sendNet({t:'cancel'}); netShowModes(); }
+      break;
+    case 'match': onMatch(m); break;
+    case 'countdown': onNetCountdown(m.n); break;
+    case 'state': onNetState(m.snap); break;
+    case 'result': onNetResult(m); break;
+    case 'error': netProg('⚠️ '+m.msg); setTimeout(netShowModes, 1800); break;
+    case 'cancelled': netShowModes(); break;
+  }
+}
+
+// build local renderer racers from the server's roster; my racer goes to index 0
+function onMatch(m){
+  ['menu','maplobby','lobby','results','leaderboard','suipanel','netpanel'].forEach(id=>document.getElementById(id).classList.add('hidden'));
+  forcedTheme = m.theme;
+  track = buildTrack(m.seed, m.theme);          // same seed+theme => identical track to the server
+  traps=[]; fx=[]; feed=[]; camX=0; raceTime=0; flashT=0;
+  netById = {}; netGotSnap=false; netStake = m.stake||0;
+  racers = m.racers.map(sr=>{
+    const ci = Math.max(0, Math.min(CHARS.length-1, sr.char|0));
+    const c = CHARS[ci];
+    const r = makeRacer({ id:c.id, name:c.name, dname:sr.name, color:c.c, ear:c.ear, belly:c.belly, species:c.species, isPlayer: sr.id===myNetId });
+    r.netId = sr.id; r.isBot = !!sr.bot; netById[sr.id]=r; return r;
+  });
+  racers.sort((a,b)=> (b.isPlayer?1:0)-(a.isPlayer?1:0));   // me first → camera + HUD lock to me
+  buildPips(); updateItemSlot();
+  hud.classList.remove('hidden');
+  online=true; lastWasOnline=true; gameMode='online'; state='countdown';
+  $net('countdown') && null;
+  document.getElementById('countdown').classList.remove('hidden');
+  document.getElementById('countNum').textContent='…';
+}
+function onNetCountdown(n){
+  const el=document.getElementById('countNum'), ov=document.getElementById('countdown');
+  ov.classList.remove('hidden');
+  if (n>0){ el.textContent=n; el.style.animation='none'; void el.offsetWidth; el.style.animation=''; countTone(n); }
+  else { el.textContent='GO!'; goChord(); state='racing'; raceTime=0; startMusic(track?track.theme:'hills');
+    setTimeout(()=>ov.classList.add('hidden'), 420); }
+}
+function onNetState(snap){
+  raceTime = snap.t;
+  for (const s of snap.racers){
+    const r = netById[s.id]; if(!r) continue;
+    r._tx=s.x; r._ty=s.y; r.vy=s.vy; r.onGround=!!s.g;
+    r.boostT=s.b?0.4:0; r.stunT=s.s?0.4:0; r.runPhase=s.rp;
+    if (s.f){ r.finished=true; r.finishTime=s.pl; } r.place=s.pl;
+    if (!netGotSnap){ r.x=s.x; r.y=s.y; }     // snap to first frame (avoid lerp from the start line)
+  }
+  netGotSnap=true;
+}
+// interpolate toward the latest snapshot + drive the camera (no local physics)
+function netStep(dt){
+  if (netGotSnap){ const k=Math.min(1,dt*20);
+    for (const r of racers){ if(r._tx!=null){ r.x+=(r._tx-r.x)*k; r.y+=(r._ty-r.y)*k; } } }
+  const me=racers[0];
+  if (me){ camXTarget = clamp(me.x-320, 0, WORLD_LEN-VW+200); camX += (camXTarget-camX)*Math.min(1,dt*8); }
+  if (shake>0) shake=Math.max(0, shake-dt*42);
+  updateHUD();
+}
+function onNetResult(m){
+  online=false; state='results'; hud.classList.add('hidden'); stopMusic();
+  const order = m.order||[];
+  const mine = order.find(o=>o.id===myNetId);
+  const myPlace = mine ? mine.place : order.length;
+  const charOf = ci => CHARS[Math.max(0,Math.min(CHARS.length-1,ci|0))];
+  document.getElementById('resultTitle').innerHTML =
+    myPlace===1 ? '🏆 YOU WIN!' : (myPlace>=order.length ? 'LAST… 😵' : `${ordinal(myPlace)} place!`);
+  // settlement line for staked rooms
+  let gain = netStake>0 ? `Staked PvP · ${netStake} SUI each` : 'Quick Match';
+  if (m.settle){ if (m.settle.error) gain = '⛓️ ⚠️ settle: '+m.settle.error;
+    else if (m.settle.payout!=null){ const pay=(Number(m.settle.payout)/1e9).toFixed(3);
+      gain = myPlace===1 ? `⛓️ 🏆 +${pay} SUI paid on-chain (pot − 10% fee)` : `⛓️ opponent paid ${pay} SUI on-chain`; } }
+  document.getElementById('ratingGain').textContent = gain;
+  // podium (2nd · 1st · 3rd)
+  const cols=[[1,112,'#9fb0c8'],[0,150,'#ffd24a'],[2,84,'#cd8e54']];
+  const pod=document.getElementById('podium'); pod.innerHTML='';
+  cols.forEach((cfg,i)=>{ const o=order[cfg[0]]; if(!o) return; const c=charOf(o.char);
+    const div=document.createElement('div'); div.className='ppl'; div.style.animationDelay=(i*0.12)+'s';
+    div.innerHTML=`<img src="assets/${c.id}.png" alt="">`+
+      `<div class="pname">${o.id===myNetId?'⭐ ':''}${esc(o.name)}</div>`+
+      `<div class="ptime">${ordinal(o.place)}${o.bot?' 🤖':''}</div>`+
+      `<div class="pbase" style="height:${cfg[1]}px;background:linear-gradient(${cfg[2]}, ${shade(cfg[2],-0.28)})">${cfg[0]+1}</div>`;
+    pod.appendChild(div); });
+  const ul=document.getElementById('resultList'); ul.innerHTML='';
+  order.forEach((o,i)=>{ const c=charOf(o.char);
+    const li=document.createElement('li'); if(o.id===myNetId) li.className='you';
+    li.innerHTML=`<span class="pos">${['🥇','🥈','🥉','4️⃣'][i]||(i+1)}</span>`+
+      `<span class="swatch" style="background:${c.c}"></span>`+
+      `<span class="nm">${esc(o.name)}${o.bot?' 🤖':''}</span><span class="tm">${ordinal(o.place)}</span>`;
+    ul.appendChild(li); });
+  document.getElementById('results').classList.remove('hidden');
+}
+
+// ---- online panel flow ----
+function netShowModes(){ $net('netModes').style.display=''; $net('netProgress').classList.add('hidden'); $net('netCancel').style.display='none'; }
+function netShowQueue(){ $net('netModes').style.display='none'; $net('netCancel').style.display=''; }
+async function showNet(){
+  audioInit(); savePlayerName(nameInput.value);
+  ['menu','maplobby','lobby','results','leaderboard','countdown','suipanel'].forEach(id=>document.getElementById(id).classList.add('hidden'));
+  hud.classList.add('hidden'); $net('netpanel').classList.remove('hidden'); state='net'; netShowModes();
+  const status=$net('netStatus'); status.textContent='Connecting to game server…';
+  try{ await connectNet(); status.textContent='Connected ✓ — pick a mode.'; }
+  catch(e){ status.innerHTML='⚠️ Game server offline. Start it with <code>node server.js</code> in <code>funrun-game/server</code>, then reopen.'; }
+}
+async function queueCasual(){
+  if (!(net&&net.readyState===1)){ try{ await connectNet(); }catch(e){ netProg('⚠️ '+(e.message||e)); return; } }
+  sendNet({t:'hello', name:playerName, char:chosenChar}); sendNet({t:'find', mode:'casual'});
+  netShowQueue(); netProg('Finding a match…');
+}
+async function queueStaked(stake){
+  netStake = stake; netShowQueue(); netProg('Loading on-chain module…');
+  if(!window.FunSui){ await new Promise(r=>{ window.addEventListener('funsui-ready', r, {once:true}); setTimeout(r,6000); }); }
+  if(!window.FunSui){ netProg('⚠️ on-chain module failed to load.'); return; }
+  if(!window.FunSui.hasWallet()){ netProg('⚠️ No Sui wallet found. Install Slush (Testnet) for staked PvP.'); setTimeout(netShowModes,2200); return; }
+  try{ netProg('Connecting wallet…'); await window.FunSui.connect(); }
+  catch(e){ netProg('⚠️ '+(e.message||e)); setTimeout(netShowModes,2000); return; }
+  if (!(net&&net.readyState===1)){ try{ await connectNet(); }catch(e){ netProg('⚠️ '+(e.message||e)); return; } }
+  sendNet({t:'hello', name:playerName, char:chosenChar, addr:window.FunSui.address});
+  sendNet({t:'find', mode:'staked', stake, addr:window.FunSui.address});
+  netProg(`Staked ${stake} SUI queue · waiting for an opponent…`);
+}
+function leaveNet(){ if(net&&net.readyState===1) sendNet({t:'cancel'}); online=false; try{ net&&net.close(); }catch(e){} net=null; }
+$net('netBtn').onclick = ()=>showNet();
+$net('netCasual').onclick = ()=>queueCasual();
+$net('netTiers').addEventListener('click', e=>{ const b=e.target.closest('button[data-stake]'); if(b) queueStaked(parseFloat(b.dataset.stake)); });
+$net('netCancel').onclick = ()=>{ sendNet({t:'cancel'}); netShowModes(); };
+$net('netBack').onclick = ()=>{ leaveNet(); $net('netpanel').classList.add('hidden'); showMenu(); };
+
 // boot
 requestAnimationFrame(frame);
 </script>
@@ -2493,7 +2698,26 @@ async function settle(roomId, winnerAddr, step=()=>{}){
   return { digest: res.digest, fields: room.data?.content?.fields };
 }
 
+// ---- Phase-1 staked PvP: a shared on-chain room for TWO real players ----
+// The server (operator) does start_race + finish_race, so neither player can
+// settle a result. Host creates+stakes; guest stakes into the same room.
+async function createStakedRoom(stakeSui){
+  if (!S.address) await connect();
+  const entry = sui2mist(stakeSui);
+  const created = await walletExec(txCreate(entry));
+  const room = roomIdFrom(created);
+  if (!room) throw new Error('could not find created RaceRoom');
+  await walletExec(txJoin(room, entry));        // host stakes its own entry
+  return room;
+}
+async function joinStakedRoom(room, stakeSui){
+  if (!S.address) await connect();
+  await walletExec(txJoin(room, sui2mist(stakeSui)));
+  return room;
+}
+
 window.FunSui = { ...S, connect, getConfig, getBalance, playStaked, settle,
+  createStakedRoom, joinStakedRoom,
   sui2mist, mist2sui, PKG, CONFIG, NET, get address(){ return S.address; }, hasWallet:()=>!!findWallet() };
 window.dispatchEvent(new Event('funsui-ready'));
 </script>
