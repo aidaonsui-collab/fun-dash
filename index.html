@@ -448,12 +448,15 @@ const TIERS = [GROUND_Y, GROUND_Y-58, GROUND_Y-116, GROUND_Y-168, GROUND_Y-220];
 // Build a multi-tier platform course: platforms at varied heights with chasms between.
 // Up-steps always sit across a gap (jump UP onto a ledge); down-steps can be adjacent (drop off).
 // Gaps and hurdles get wider/taller toward the finish (difficulty ramp).
+// each themed map gets one signature hazard (easy maps — hills/candy — get none)
+const HAZARD_BY_THEME = { caves:'saw', neon:'saw', frost:'rock', volcano:'rock', dunes:'pit', swamp:'pit' };
 function buildTrack(seed, themeOverride){
   const rnd = mulberry32(seed);
   const keys = Object.keys(THEME);
   const theme = themeOverride || keys[(rnd()*keys.length)|0];
   const clampTier = v => Math.max(0, Math.min(TIERS.length-1, v));
-  const segments = [], obstacles = [], crates = [];
+  const segments = [], obstacles = [], crates = [], hazards = [];
+  const hazType = HAZARD_BY_THEME[theme];
 
   segments.push({ x0:0, x1:780, y:GROUND_Y });          // flat start straight
   let cursor = 780, tier = 0;
@@ -478,15 +481,25 @@ function buildTrack(seed, themeOverride){
     const seg = { x0:cursor, x1:cursor+len, y };
     if (tunnel){ seg.tunnel = true; seg.ceil = y - 76; }
     segments.push(seg);
-    if (!tunnel && len > 200 && rnd() < 0.32 + prog*0.18)   // hurdle on the platform
+    let hadHurdle = false;
+    if (!tunnel && len > 200 && rnd() < 0.32 + prog*0.18){   // hurdle on the platform
       obstacles.push({ x: seg.x0 + 80 + rnd()*(len-160), w:26, h: 32 + rnd()*30 + prog*22, y });
+      hadHurdle = true;
+    }
+    // signature hazard: one per platform, never alongside a hurdle or inside a tunnel (commoner late)
+    if (hazType && !tunnel && !hadHurdle && len > 250 && rnd() < 0.30 + prog*0.18){
+      const hx = seg.x0 + len*(0.40 + rnd()*0.20);
+      if (hazType==='saw')       hazards.push({ type:'saw',  x:hx, y, range:Math.min(64,(len-150)/2), spd:1.3+rnd()*0.9, phase:rnd()*6.283 });
+      else if (hazType==='rock') hazards.push({ type:'rock', x:hx, y, period:1.5+rnd()*1.1, phase:rnd()*3, top:y-(155+rnd()*70) });
+      else { const w=Math.min(86,56+rnd()*30); hazards.push({ type:'pit', x:hx, y, w, x0:hx-w/2, x1:hx+w/2 }); }
+    }
     if (rnd() < 0.66)                                    // power-up crate (low inside tunnels, under the roof)
       crates.push({ x: seg.x0 + len*(0.4+rnd()*0.25), y: tunnel ? y-40 : y-74, w:34, h:34, gotBy:[] });
     cursor = seg.x1;
     lastTunnel = tunnel;
   }
   segments.push({ x0:cursor, x1:WORLD_LEN+700, y:GROUND_Y });   // flat run-in to the flag
-  return { theme, segments, obstacles, crates };
+  return { theme, segments, obstacles, crates, hazards };
 }
 
 // platform under x (null = over a chasm)
@@ -517,6 +530,7 @@ function makeRacer(opts){
     aiUseT: 0, hitObstacles: new Set(),
     landT: 0, popT: 0, spin: 0,   // animation timers (land squash / pickup pop / hit tumble)
     fallStreak: 0, lastFallX: -9999,   // chasm respawn safety-net tracking
+    lastPit: null,                     // hazard-pit "trip once per entry" tracking
     dustT: 0, boostCol: '#ffb43c', // run-dust cadence / boost-trail tint
   };
 }
@@ -701,6 +715,14 @@ function update(dt){
     // ---- AI ----
     if (!r.isPlayer) updateAI(r, dt);
 
+    // hazard pit: grounded racers slog through (slow) + trip once on entry; jumping over is safe
+    let inPit = null;
+    if (track.hazards && r.onGround){
+      for (const hz of track.hazards){ if (hz.type==='pit' && r.x>hz.x0 && r.x<hz.x1){ inPit=hz; break; } }
+    }
+    if (inPit){ if (r.lastPit!==inPit && r.stunT<=0){ stun(r,0.4); sfx('zap'); } r.lastPit=inPit; }
+    else r.lastPit=null;
+
     // ---- horizontal motion (rubber-banded so nobody runs away without a reason) ----
     let spd = BASE_SPEED * r.speedVar;
     const behind = leadX - r.x;
@@ -708,6 +730,7 @@ function update(dt){
     if (behind < 30) spd *= 0.93;                    // the leader eases off a touch
     if (r.boostT>0) spd *= BOOST_MULT;
     if (r.stunT>0)  spd *= 0.20;                      // stun = limp, not a near-stop
+    if (inPit)      spd *= 0.5;                        // slog through the muck
     r.x += spd * dt;
 
     // ---- vertical physics on tiered platforms ----
@@ -783,6 +806,24 @@ function update(dt){
       }
     }
 
+    // ---- map hazards: sweeping sawblades (ride the platform) + falling rocks (timing) ----
+    if (track.hazards){
+      for (const hz of track.hazards){
+        if (hz.type==='saw'){
+          const sx = hz.x + Math.sin(raceTime*hz.spd + hz.phase)*hz.range;
+          if (r.stunT<=0 && Math.abs(r.x-sx) < 24 && (r.y - hz.y) > -28){   // jumped clear of the blade = safe
+            stun(r, 0.5); sfx('zap');
+          }
+        } else if (hz.type==='rock'){
+          const ph = ((raceTime+hz.phase) % hz.period)/hz.period;
+          const ry = hz.top + (hz.y - hz.top)*ph;
+          if (r.stunT<=0 && ph>0.5 && Math.abs(r.x-hz.x) < 22 && Math.abs(r.y-ry) < 30){
+            stun(r, 0.5); sfx('zap');
+          }
+        }
+      }
+    }
+
     // run-cycle anim
     if (r.onGround && r.stunT<=0) r.runPhase += dt * (spd/26);
 
@@ -838,7 +879,14 @@ function updateAI(r, dt){
     const after = segAt(seg.x1 + 6);
     const gapAhead = distEdge < 46 && (!after || after.y < seg.y - 4);   // leap CLOSE to the edge (keeps the arc for the gap)
     const hurdleClose = track.obstacles.some(o => o.x>r.x && o.x-r.x<100 && o.x-r.x>0 && Math.abs(o.y-seg.y)<24);
-    if ((gapAhead || hurdleClose) && Math.random() < 0.97){ r.vy = -JUMP_V; r.onGround=false; r.jumps=1; }
+    // hop a sawblade sweeping toward us, or the near lip of a hazard pit (rocks are timing-based — AI just eats the rare brief trip)
+    const hazClose = track.hazards && track.hazards.some(hz => {
+      if (Math.abs(hz.y-seg.y) > 24) return false;
+      if (hz.type==='saw'){ const sx=hz.x+Math.sin(raceTime*hz.spd+hz.phase)*hz.range; return sx>r.x && sx-r.x<88; }
+      if (hz.type==='pit'){ return hz.x0>r.x-12 && hz.x0-r.x<78; }
+      return false;
+    });
+    if ((gapAhead || hurdleClose || hazClose) && Math.random() < 0.97){ r.vy = -JUMP_V; r.onGround=false; r.jumps=1; }
   }
   // reliably double-jump just after apex while over a chasm
   else if (!r.onGround && r.jumps<2 && r.vy>10 && !segAt(r.x)){
@@ -900,6 +948,7 @@ function render(){
     drawScaffolds();
     drawCrates();
     drawTraps();
+    drawHazards();
     drawFinish();
     const order = racers.slice().sort((a,b)=>a.x-b.x);   // back-to-front by x
     for (const r of order) drawCritter(r);
@@ -1391,6 +1440,73 @@ function drawTraps(){
     ctx.fillStyle='#717a8a'; ctx.beginPath(); ctx.arc(0,0,5,0,7); ctx.fill();
     ctx.fillStyle='#3c424d'; ctx.beginPath(); ctx.arc(0,0,2,0,7); ctx.fill();
     ctx.restore();
+  }
+}
+// ---- map hazards (theme-tinted): sweeping sawblade, falling rock, bubbling pit ----
+function drawBlade(x, y, R, T){
+  const teeth=(r1,r2)=>{ ctx.beginPath(); for(let i=0;i<16;i++){ const a=i/16*6.283, r=(i%2?r1:r2); ctx.lineTo(Math.cos(a)*r,Math.sin(a)*r);} ctx.closePath(); };
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  const gl=ctx.createRadialGradient(x,y,2,x,y,R*2); gl.addColorStop(0,rgba(T.glow,0.45)); gl.addColorStop(1,rgba(T.glow,0));
+  ctx.fillStyle=gl; ctx.beginPath(); ctx.arc(x,y,R*2,0,7); ctx.fill(); ctx.restore();
+  ctx.save(); ctx.translate(x,y); ctx.rotate(raceTime*12);
+  const bg=ctx.createRadialGradient(-R*0.3,-R*0.3,2,0,0,R); bg.addColorStop(0,'#eef2f8'); bg.addColorStop(1,'#8b95a6');
+  ctx.fillStyle=bg; teeth(R*0.62,R); ctx.fill();
+  ctx.strokeStyle=shade(T.glow,-0.1); ctx.lineWidth=1.4; teeth(R*0.62,R); ctx.stroke();
+  ctx.fillStyle='#717a8a'; ctx.beginPath(); ctx.arc(0,0,R*0.28,0,7); ctx.fill();
+  ctx.fillStyle='#3c424d'; ctx.beginPath(); ctx.arc(0,0,R*0.12,0,7); ctx.fill();
+  ctx.restore();
+}
+function drawRock(x, y, T){
+  const R=15;
+  ctx.save(); ctx.globalCompositeOperation='lighter';        // glow halo so it telegraphs (ember / icy)
+  const hg=ctx.createRadialGradient(x,y,2,x,y,R*2.1); hg.addColorStop(0,rgba(T.glow,0.5)); hg.addColorStop(1,rgba(T.glow,0));
+  ctx.fillStyle=hg; ctx.beginPath(); ctx.arc(x,y,R*2.1,0,7); ctx.fill(); ctx.restore();
+  ctx.save(); ctx.translate(x,y);
+  const g=ctx.createLinearGradient(0,-R,0,R); g.addColorStop(0,shade(T.dirt,0.18)); g.addColorStop(1,shade(T.dirtLo,-0.05));
+  ctx.fillStyle=g; ctx.beginPath();
+  const pts=[[-R,2],[-R*0.6,-R*0.9],[R*0.4,-R],[R,-R*0.2],[R*0.7,R*0.8],[-R*0.3,R]];
+  ctx.moveTo(pts[0][0],pts[0][1]); for(const p of pts) ctx.lineTo(p[0],p[1]); ctx.closePath(); ctx.fill();
+  ctx.save(); ctx.globalCompositeOperation='lighter';   // glowing veins (lava / icy sheen)
+  ctx.strokeStyle=rgba(T.glow,0.7); ctx.lineWidth=1.6; ctx.beginPath(); ctx.moveTo(-R*0.5,-2); ctx.lineTo(0,R*0.3); ctx.lineTo(R*0.5,-R*0.3); ctx.stroke(); ctx.restore();
+  ctx.restore();
+}
+function drawPit(x0, gy, w, T){
+  const x=x0-camX;
+  ctx.fillStyle='rgba(0,0,0,0.55)'; ctx.fillRect(x-2, gy-1, w+4, 24);          // dark void
+  ctx.save(); ctx.beginPath(); ctx.rect(x, gy-3, w, 18); ctx.clip();           // churning liquid pool
+  const g=ctx.createLinearGradient(0,gy-3,0,gy+15);
+  g.addColorStop(0,shade(T.glow,0.28)); g.addColorStop(0.5,shade(T.glow,-0.12)); g.addColorStop(1,shade(T.glow,-0.55));
+  ctx.fillStyle=g; ctx.fillRect(x,gy-3,w,18);
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  ctx.strokeStyle=rgba(T.glow,0.55); ctx.lineWidth=2; ctx.beginPath();         // surface churn
+  for(let sx=0;sx<=w;sx+=6){ const sy=gy-1+Math.sin(sx*0.2+raceTime*4)*2; sx===0?ctx.moveTo(x+sx,sy):ctx.lineTo(x+sx,sy);} ctx.stroke();
+  ctx.fillStyle=rgba(T.glow,0.85);                                             // rising bubbles
+  for(let i=0;i<6;i++){ const bx=x+(((i*47+raceTime*16*(i%2?1:-1))%w)+w)%w, by=gy+7-Math.abs(Math.sin(raceTime*2.2+i*1.3))*10; ctx.beginPath(); ctx.arc(bx,by,1.6+(i%3),0,7); ctx.fill(); }
+  ctx.restore(); ctx.restore();
+  ctx.save(); ctx.globalCompositeOperation='lighter';                          // pulsing warning glow above
+  const pulse=0.5+0.5*Math.sin(raceTime*5);
+  const gl=ctx.createLinearGradient(0,gy-28,0,gy); gl.addColorStop(0,rgba(T.glow,0)); gl.addColorStop(1,rgba(T.glow,0.3*pulse));
+  ctx.fillStyle=gl; ctx.fillRect(x,gy-28,w,28); ctx.restore();
+  ctx.fillStyle=rgba(T.glow,0.95); ctx.fillRect(x-1,gy-3,w+2,2.5);             // hot lip
+}
+function drawHazards(){
+  if (!track.hazards) return;
+  const T=THEME[track.theme];
+  for (const hz of track.hazards){
+    if (hz.type==='saw'){
+      const wx=hz.x+Math.sin(raceTime*hz.spd+hz.phase)*hz.range, x=wx-camX;
+      if (x>VW+40||x<-40) continue;
+      ctx.strokeStyle='rgba(0,0,0,0.22)'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(hz.x-hz.range-camX,hz.y-2); ctx.lineTo(hz.x+hz.range-camX,hz.y-2); ctx.stroke();
+      drawBlade(x, hz.y-13, 18, T);
+    } else if (hz.type==='rock'){
+      const x=hz.x-camX; if (x>VW+40||x<-40) continue;
+      const ph=((raceTime+hz.phase)%hz.period)/hz.period, ry=hz.top+(hz.y-hz.top)*ph, sh=0.25+ph*0.6;
+      ctx.fillStyle=`rgba(0,0,0,${0.3*sh})`; ctx.beginPath(); ctx.ellipse(x,hz.y-2,13*sh+5,5,0,0,7); ctx.fill();
+      drawRock(x, ry-13, T);
+    } else {
+      if (hz.x1-camX<0||hz.x0-camX>VW) continue;
+      drawPit(hz.x0, hz.y, hz.w, T);
+    }
   }
 }
 function drawFinish(){
