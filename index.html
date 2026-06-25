@@ -332,7 +332,15 @@ CHARS.forEach(c => { const im = new Image(); im.src = 'assets/' + c.id + '.png';
 // feet-anchored cells. The run cycle auto-links to running speed (faster = faster):
 //   SHEET.hippo = { src:'assets/hippo_run.png', frames:8 };
 // Air & stun keep using the static PFP, so you can enable characters one at a time.
-const SHEET = { hippo: { src:'assets/hippo_run.png', frames:4 } };
+const SHEET = {
+  hippo: { src:'assets/hippo_run.png', frames:4 },
+  blub:  { src:'assets/blub_run.png',  frames:4 },
+  miu:   { src:'assets/miu_run.png',   frames:4 },
+  lofi:  { src:'assets/lofi_run.png',  frames:4 },
+  axol:  { src:'assets/axol_run.png',  frames:4 },
+  fud:   { src:'assets/fud_run.png',   frames:4 },
+  pans:  { src:'assets/pans_run.png',  frames:4 },
+};
 const STRIP = {};
 for (const id in SHEET){ const im = new Image(); im.src = SHEET[id].src; STRIP[id] = im; }
 
