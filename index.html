@@ -2449,7 +2449,7 @@ async function onNetMsg(m){
   switch(m.t){
     case 'welcome': myNetId = m.id; break;   // a human's racer id == its client id
     case 'queued': netProg(m.mode==='staked'
-      ? `Staked ${m.stake} SUI · waiting for an opponent… (${m.n} in queue)`
+      ? `Staked ${m.stake} SUI · ${m.n}/${m.max||4} players in — waiting for more…`
       : `Finding a match… (${m.n} player${m.n>1?'s':''} ready)`); break;
     case 'you': myNetId = m.id;              // re-mark if the match was built before this arrived
       if (racers && racers.length){ let changed=false;
@@ -2458,9 +2458,9 @@ async function onNetMsg(m){
       break;
     case 'stake_wait': netProg('Opponent found! Waiting for host to open the room…'); break;
     case 'stake_host':
-      netProg('Opponent found! Creating the staked room on-chain…');
-      try{ const room = await window.FunSui.createStakedRoom(netStake); sendNet({t:'staked_room', room});
-           netProg('Room created + staked. Waiting for your opponent to stake…'); }
+      netProg('Match found! Creating the staked room on-chain…');
+      try{ const n=m.players||2; const room = await window.FunSui.createStakedRoom(netStake, n); sendNet({t:'staked_room', room});
+           netProg('Room created + staked. Waiting for '+(n-1)+' more to stake…'); }
       catch(e){ netProg('⚠️ '+(e.message||e)); sendNet({t:'cancel'}); netShowModes(); }
       break;
     case 'stake_join':
@@ -2682,8 +2682,9 @@ async function getConfig(){
 async function getBalance(addr){ return BigInt((await client.getBalance({ owner: addr||S.address })).totalBalance); }
 
 // ---- tx builders (match the deployed race module) ----
-const txCreate = (entryMist) => { const t=new Transaction();
-  t.moveCall({ target:`${PKG}::race::create_race`, arguments:[t.object(CONFIG), t.pure.u64(entryMist), t.pure.u64(2)] }); return t; };
+const txCreate = (entryMist, maxPlayers=2) => { const t=new Transaction();
+  const mp = Math.max(2, Math.min(4, maxPlayers|0));
+  t.moveCall({ target:`${PKG}::race::create_race`, arguments:[t.object(CONFIG), t.pure.u64(entryMist), t.pure.u64(mp)] }); return t; };
 const txJoin = (room, entryMist) => { const t=new Transaction();
   const [c]=t.splitCoins(t.gas,[t.pure.u64(entryMist)]); t.moveCall({ target:`${PKG}::race::join_race`, arguments:[t.object(room), c] }); return t; };
 const txStart = (room) => { const t=new Transaction(); t.moveCall({ target:`${PKG}::race::start_race`, arguments:[t.object(CONFIG), t.object(room)] }); return t; };
@@ -2752,10 +2753,10 @@ async function settle(roomId, winnerAddr, step=()=>{}){
 // ---- Phase-1 staked PvP: a shared on-chain room for TWO real players ----
 // The server (operator) does start_race + finish_race, so neither player can
 // settle a result. Host creates+stakes; guest stakes into the same room.
-async function createStakedRoom(stakeSui){
+async function createStakedRoom(stakeSui, maxPlayers=2){
   if (!S.address) await connect();
   const entry = sui2mist(stakeSui);
-  const created = await walletExec(txCreate(entry));
+  const created = await walletExec(txCreate(entry, maxPlayers));
   const room = roomIdFrom(created);
   if (!room) throw new Error('could not find created RaceRoom');
   await walletExec(txJoin(room, entry));        // host stakes its own entry

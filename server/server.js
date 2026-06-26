@@ -22,6 +22,8 @@ const settle = require('./settle');
 const PORT       = process.env.PORT || 8125;
 const FIELD      = 4;                 // casual field size (humans + bots)
 const CASUAL_WAIT= +process.env.CASUAL_WAIT || 6000;   // ms to wait for more humans before filling bots
+const STAKE_FIELD= Math.max(2, Math.min(4, +process.env.STAKE_FIELD || 4));  // max staked pot size (contract caps at 4)
+const STAKE_FILL = +process.env.STAKE_FILL || 8000;    // ms to wait for more stakers once >=2 are queued
 const STAKE_WAIT = +process.env.STAKE_WAIT || 45000;   // ms a staked match has to complete its on-chain handshake
 const TICK_HZ    = +process.env.TICK_HZ || 30;         // sim+broadcast rate (fixed-dt, so determinism is unaffected)
 const BOT_NAMES  = ['BoltBunny','TurboTuna','MetaMutt','PixelPaws','SnaccMan','NovaPaws','FrostFang','Zoomer','GG_Wolf','Krillin22'];
@@ -32,6 +34,7 @@ const clients = new Map();            // cid -> client
 const rooms   = new Map();            // gid -> room
 let casualQ   = [];                   // cids waiting for a casual match
 const stakedQ = new Map();            // stakeTier(string) -> [cids]
+const stakedTimers = new Map();       // stakeTier(string) -> fill-window timer
 let casualTimer = null;
 
 const now = () => Date.now();
@@ -66,55 +69,57 @@ function formCasual(){
   startRoom('casual', entrants, { stake: 0 });
 }
 
+function liveQ(key){ return (stakedQ.get(key)||[]).map(id => clients.get(id)).filter(x => x && x.ws.readyState === 1 && x.state === 'queue'); }
 function enterStaked(c, stake){
   c.state = 'queue'; c.mode = 'staked'; c.stake = stake;
   const key = String(stake);
   if (!stakedQ.has(key)) stakedQ.set(key, []);
   const q = stakedQ.get(key);
   if (!q.includes(c.id)) q.push(c.id);
-  send(c, { t:'queued', mode:'staked', stake, n: q.length, need: 2 });
-  // pair the first two live humans
-  const live = q.map(id => clients.get(id)).filter(x => x && x.ws.readyState === 1);
-  if (live.length >= 2){
-    const [host, guest] = live;
-    stakedQ.set(key, q.filter(id => id !== host.id && id !== guest.id));
-    beginStakedHandshake(host, guest, stake);
-  }
+  const n = liveQ(key).length;
+  for (const cc of liveQ(key)) send(cc, { t:'queued', mode:'staked', stake, n, need: 2, max: STAKE_FIELD });
+  if (n >= STAKE_FIELD) formStaked(key);                              // full pot → start now
+  else if (n >= 2 && !stakedTimers.has(key))                         // ≥2 → brief wait for more, then start
+    stakedTimers.set(key, setTimeout(() => formStaked(key), STAKE_FILL));
+}
+function formStaked(key){
+  const t = stakedTimers.get(key); if (t) clearTimeout(t); stakedTimers.delete(key);
+  const players = liveQ(key).slice(0, STAKE_FIELD);
+  if (players.length < 2) return;                                    // need ≥2 real stakers
+  const ids = new Set(players.map(p => p.id));
+  stakedQ.set(key, (stakedQ.get(key)||[]).filter(id => !ids.has(id)));
+  beginStakedHandshake(players, Number(key));
 }
 
-// Staked rooms need a shared on-chain RaceRoom: host creates+joins, guest joins,
-// server verifies the escrow, then operates the race.
-function beginStakedHandshake(host, guest, stake){
-  const hs = { id: 'sh'+nextGid++, host, guest, stake, onchainRoom: null, hostJoined:false, guestJoined:false, ts: now() };
-  host.handshake = hs; guest.handshake = hs;
-  host.state = guest.state = 'handshake';
-  send(host,  { t:'stake_host', stake });                 // host: create_race + join, reply staked_room
-  send(guest, { t:'stake_wait', stake });                 // guest: hold for the room id
+// Staked rooms share ONE on-chain RaceRoom (2–4 players): host create_race(maxPlayers=N)+join,
+// each guest joins, server verifies every stake, then operates the race.
+function beginStakedHandshake(players, stake){
+  const hs = { id: 'sh'+nextGid++, players, host: players[0], stake, onchainRoom: null, joined: new Set(), ts: now() };
+  for (const p of players){ p.handshake = hs; p.state = 'handshake'; }
+  send(hs.host, { t:'stake_host', stake, players: players.length });   // host: create_race(maxPlayers=N) + join
+  for (const g of players.slice(1)) send(g, { t:'stake_wait', stake });
   hs.timer = setTimeout(() => failHandshake(hs, 'handshake timed out'), STAKE_WAIT);
 }
 function failHandshake(hs, msg){
   clearTimeout(hs.timer);
-  for (const c of [hs.host, hs.guest]){ if (c){ c.handshake=null; c.state='idle'; send(c, { t:'error', msg }); } }
+  for (const c of hs.players){ if (c){ c.handshake = null; c.state = 'idle'; send(c, { t:'error', msg }); } }
 }
 async function tryStartStaked(hs){
-  if (!(hs.onchainRoom && hs.hostJoined && hs.guestJoined)) return;
+  if (!hs.onchainRoom || hs.joined.size < hs.players.length) return;   // wait for every player to stake
   clearTimeout(hs.timer);
-  // verify the escrow on-chain before anyone races for it
+  // verify all stakes on-chain before anyone races for the pot
   if (settle.settlementEnabled()){
     try {
       const room = await settle.readRoom(hs.onchainRoom);
-      const want = new Set([hs.host.addr, hs.guest.addr].map(a => a.toLowerCase()));
+      const want = new Set(hs.players.map(p => (p.addr||'').toLowerCase()));
       const have = new Set(room.players.map(a => a.toLowerCase()));
-      if (room.state !== 0 || want.size !== 2 || ![...want].every(a => have.has(a)))
-        return failHandshake(hs, 'on-chain room not ready (both players must be staked)');
+      if (room.state !== 0 || want.size !== hs.players.length || ![...want].every(a => have.has(a)))
+        return failHandshake(hs, 'on-chain room not ready (all players must be staked)');
       await settle.startRace(hs.onchainRoom);            // operator flips WAITING -> IN_PROGRESS
     } catch(e){ return failHandshake(hs, 'on-chain verify/start failed: ' + e.message); }
   }
-  const entrants = [
-    { id: hs.host.id,  name: hs.host.name,  char: hs.host.char,  bot:false, addr: hs.host.addr },
-    { id: hs.guest.id, name: hs.guest.name, char: hs.guest.char, bot:false, addr: hs.guest.addr },
-  ];
-  hs.host.handshake = hs.guest.handshake = null;
+  const entrants = hs.players.map(p => ({ id:p.id, name:p.name, char:p.char, bot:false, addr:p.addr }));
+  for (const p of hs.players) p.handshake = null;
   startRoom('staked', entrants, { stake: hs.stake, onchainRoom: hs.onchainRoom });
 }
 
@@ -213,12 +218,12 @@ wss.on('connection', (ws) => {
         } else enterCasual(c);
         break;
       case 'staked_room':                 // host reports the on-chain RaceRoom it created+joined
-        if (c.handshake && c.handshake.host === c){ c.handshake.onchainRoom = String(m.room); c.handshake.hostJoined = true;
-          send(c.handshake.guest, { t:'stake_join', room: String(m.room), stake: c.handshake.stake });
-          tryStartStaked(c.handshake); }
+        if (c.handshake && c.handshake.host === c){ const hs = c.handshake; hs.onchainRoom = String(m.room); hs.joined.add(c.id);
+          for (const g of hs.players.slice(1)) send(g, { t:'stake_join', room: hs.onchainRoom, stake: hs.stake });
+          tryStartStaked(hs); }
         break;
-      case 'staked_joined':               // guest confirms it joined the host's room on-chain
-        if (c.handshake && c.handshake.guest === c){ c.handshake.guestJoined = true; tryStartStaked(c.handshake); }
+      case 'staked_joined':               // a guest confirms it joined the shared room on-chain
+        if (c.handshake){ c.handshake.joined.add(c.id); tryStartStaked(c.handshake); }
         break;
       case 'input':
         if (c.room){ const room = rooms.get(c.room); if (room && !room.finalized) room.race.input(c.id); }

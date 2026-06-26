@@ -107,6 +107,49 @@ async function testAuthority(){
   a.ws.close(); b.ws.close();
 }
 
+// ---- 3) staked PvP matchmaking: 4-player pot (settlement OFF, fake chain acks) ----
+function mkStakedClient(name, char, addr){
+  const ws = new WebSocket(`ws://localhost:${PORT}`);
+  const c = { ws, name, addr, id:null, match:null, result:null, wasHost:false, staked:false };
+  ws.on('open', () => { ws.send(JSON.stringify({ t:'hello', name, char, addr }));
+    ws.send(JSON.stringify({ t:'find', mode:'staked', stake:0.1, addr })); });
+  ws.on('message', (buf) => { const m = JSON.parse(buf.toString());
+    if (m.t === 'welcome') c.id = m.id;
+    else if (m.t === 'stake_host'){ c.wasHost = true; c.hostFor = m.players;   // host "creates" the room
+      ws.send(JSON.stringify({ t:'staked_room', room:'0xFAKEROOM' })); }
+    else if (m.t === 'stake_join'){ c.staked = true;                            // guest "joins" the room
+      ws.send(JSON.stringify({ t:'staked_joined' })); }
+    else if (m.t === 'match') c.match = m;
+    else if (m.t === 'countdown' && m.n <= 0) c._jump = setInterval(() => ws.send(JSON.stringify({ t:'input' })), 140);
+    else if (m.t === 'result'){ c.result = m; clearInterval(c._jump); }
+  });
+  return c;
+}
+async function testStaked(){
+  console.log('\n[3] staked PvP — 4-player pot (settlement off; fake on-chain acks)');
+  const cs = [0,1,2,3].map(i => mkStakedClient('Staker'+i, i, '0xstaker'+i));
+  const deadline = Date.now() + 120000;
+  while (cs.some(c => !c.result) && Date.now() < deadline) await sleep(250);
+
+  const m0 = cs[0].match;
+  if (m0 && m0.mode === 'staked' && m0.racers.length === 4) ok(`4-player staked room formed: ${m0.racers.map(r=>r.name).join(', ')}`);
+  else bad('expected a 4-player staked room, got ' + (m0 ? m0.mode+'/'+m0.racers.length : 'no match'));
+
+  if (cs.every(c => c.match && c.match.room === (m0&&m0.room))) ok('all 4 stakers share one room (one on-chain pot)');
+  else bad('stakers were split across rooms');
+
+  const hosts = cs.filter(c => c.wasHost).length;
+  if (hosts === 1) ok(`exactly one host created the room (for ${cs.find(c=>c.wasHost).hostFor} players)`);
+  else bad(`${hosts} hosts (expected exactly 1)`);
+
+  if (cs.every(c => c.result)){
+    const w = cs[0].result.winner;
+    if (cs.every(c => c.result.winner === w)) ok('all 4 stakers agree on the winner: ' + w);
+    else bad('winner disagreement among stakers');
+  } else bad('not all stakers received a result');
+  cs.forEach(c => c.ws.close());
+}
+
 // ---- run -----------------------------------------------------------------
 (async () => {
   console.log('Starting test server on :' + PORT + ' ...');
@@ -116,6 +159,7 @@ async function testAuthority(){
   try {
     testDeterminism();
     await testAuthority();
+    await testStaked();
   } finally {
     srv.kill();
   }
