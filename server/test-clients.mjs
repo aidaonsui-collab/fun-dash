@@ -31,7 +31,7 @@ function scriptedRace(){
   ];
   const r = new Race(12345, entrants);
   let step = 0;
-  while (!r.over && step < 60*30){
+  while (!r.over && step < 140*30){
     // deterministic input scripts: p1 jumps every 14 steps, p2 every 18
     if (step % 14 === 0) r.input('p1');
     if (step % 18 === 0) r.input('p2');

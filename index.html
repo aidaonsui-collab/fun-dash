@@ -357,7 +357,7 @@ const ctx = canvas.getContext('2d');
 const VW = 960, VH = 540;
 
 // ---- world / tuning ----
-const WORLD_LEN   = 9400;   // finish line x
+const WORLD_LEN   = 15800;  // finish line x (~1 min+ even for the fastest racer)
 const START_X     = 120;
 const GROUND_Y    = 430;    // feet baseline (screen + world share this Y)
 const GRAVITY     = 1600;
@@ -551,6 +551,9 @@ const TIERS = [GROUND_Y, GROUND_Y-58, GROUND_Y-116, GROUND_Y-168, GROUND_Y-220];
 // Gaps and hurdles get wider/taller toward the finish (difficulty ramp).
 // each themed map gets one signature hazard (easy maps — hills/candy — get none)
 const HAZARD_BY_THEME = { caves:'saw', neon:'saw', frost:'rock', volcano:'rock', dunes:'pit', swamp:'pit' };
+// Multi-tier course built from FLAT platforms + sloped RAMPS (run up onto raised
+// platforms / roll over hills) joined by jumpable CHASMS. No tunnels (those read as
+// "platforms you can only go under"). Each map ends in a big saw or a wide spike pit.
 function buildTrack(seed, themeOverride){
   const rnd = mulberry32(seed);
   const keys = Object.keys(THEME);
@@ -558,49 +561,55 @@ function buildTrack(seed, themeOverride){
   const clampTier = v => Math.max(0, Math.min(TIERS.length-1, v));
   const segments = [], obstacles = [], crates = [], hazards = [];
   const hazType = HAZARD_BY_THEME[theme];
+  let cursor = 0, tier = 0;
 
-  segments.push({ x0:0, x1:780, y:GROUND_Y });          // flat start straight
-  let cursor = 780, tier = 0;
+  const feature = (seg) => {                              // optional hurdle / signature hazard / crate
+    const len = seg.x1-seg.x0, prog = seg.x0/WORLD_LEN; let had=false;
+    if (len>200 && rnd()<0.30+prog*0.15){ obstacles.push({ x:seg.x0+80+rnd()*(len-160), w:26, h:32+rnd()*28+prog*20, y:seg.y }); had=true; }
+    if (hazType && !had && len>250 && rnd()<0.26+prog*0.15){
+      const hx=seg.x0+len*(0.4+rnd()*0.2);
+      if (hazType==='saw')       hazards.push({ type:'saw',  x:hx, y:seg.y, range:Math.min(64,(len-150)/2), spd:1.3+rnd()*0.9, phase:rnd()*6.283 });
+      else if (hazType==='rock') hazards.push({ type:'rock', x:hx, y:seg.y, period:1.5+rnd()*1.1, phase:rnd()*3, top:seg.y-(155+rnd()*70) });
+      else { const w=Math.min(86,56+rnd()*30); hazards.push({ type:'pit', x:hx, y:seg.y, w, x0:hx-w/2, x1:hx+w/2 }); }
+    }
+    if (rnd()<0.6) crates.push({ x:seg.x0+len*(0.4+rnd()*0.25), y:seg.y-74, w:34, h:34, gotBy:[] });
+  };
+  const platform = (len) => { const s={ x0:cursor, x1:cursor+len, y:TIERS[tier] }; segments.push(s); cursor=s.x1; return s; };
+  const ramp = (toTier, len) => { const s={ x0:cursor, x1:cursor+len, y0:TIERS[tier], y1:TIERS[toTier], y:TIERS[toTier], ramp:true }; segments.push(s); cursor=s.x1; tier=toTier; return s; };
 
-  let lastTunnel = false;
-  while (cursor < WORLD_LEN - 900){
-    const prog = cursor / WORLD_LEN;                     // 0..1 difficulty ramp
-    let gap = 0, up = false;
-    if (lastTunnel){
-      // tunnel just ended → keep the exit flat & adjacent (no gap to mistime)
-    } else if (rnd() < 0.36 + prog*0.20){               // chasm to clear (commoner late)
-      if (rnd() < 0.50){ tier = clampTier(tier+1); up = true; gap = 70 + rnd()*38 + prog*26; } // jump UP across a gap (≤134)
-      else { tier = clampTier(tier + (rnd()<0.5?0:-1)); gap = 92 + rnd()*52 + prog*40; }         // flat/down gap (≤184)
-    } else if (rnd() < 0.5){
-      tier = clampTier(tier - 1);                        // adjacent drop-down (down-only; up needs a gap)
+  segments.push({ x0:0, x1:760, y:GROUND_Y }); cursor=760;     // flat start straight
+  const END = WORLD_LEN - 1500;
+  while (cursor < END){
+    const prog = cursor/WORLD_LEN, roll = rnd();
+    if (roll < 0.34){                                          // RAMP UP → run onto a raised platform
+      ramp(clampTier(tier + (rnd()<0.35?2:1)), 100+rnd()*70);
+      feature(platform(220+rnd()*230));
+    } else if (roll < 0.52 && tier>0){                         // RAMP DOWN (roll downhill)
+      ramp(clampTier(tier - (rnd()<0.4?2:1)), 90+rnd()*70);
+      feature(platform(210+rnd()*220));
+    } else if (roll < 0.76){                                   // CHASM to jump (small step up/down)
+      if (rnd()<0.4) tier = clampTier(tier + (rnd()<0.5?1:-1));
+      cursor += 80 + rnd()*62 + prog*44;                       // gap ≤ ~186
+      feature(platform(220+rnd()*230));
+    } else {                                                   // flat run with a feature
+      feature(platform(240+rnd()*250));
     }
-    cursor += gap;
-    const y = TIERS[tier];
-    // covered corridor: flat, low ceiling (can't jump high) — never right after a climb or another tunnel
-    const tunnel = (!up && !lastTunnel && cursor > 1500 && rnd() < 0.17);
-    const len = tunnel ? (300 + rnd()*210) : (230 + rnd()*240);
-    const seg = { x0:cursor, x1:cursor+len, y };
-    if (tunnel){ seg.tunnel = true; seg.ceil = y - 76; }
-    segments.push(seg);
-    let hadHurdle = false;
-    if (!tunnel && len > 200 && rnd() < 0.32 + prog*0.18){   // hurdle on the platform
-      obstacles.push({ x: seg.x0 + 80 + rnd()*(len-160), w:26, h: 32 + rnd()*30 + prog*22, y });
-      hadHurdle = true;
-    }
-    // signature hazard: one per platform, never alongside a hurdle or inside a tunnel (commoner late)
-    if (hazType && !tunnel && !hadHurdle && len > 250 && rnd() < 0.30 + prog*0.18){
-      const hx = seg.x0 + len*(0.40 + rnd()*0.20);
-      if (hazType==='saw')       hazards.push({ type:'saw',  x:hx, y, range:Math.min(64,(len-150)/2), spd:1.3+rnd()*0.9, phase:rnd()*6.283 });
-      else if (hazType==='rock') hazards.push({ type:'rock', x:hx, y, period:1.5+rnd()*1.1, phase:rnd()*3, top:y-(155+rnd()*70) });
-      else { const w=Math.min(86,56+rnd()*30); hazards.push({ type:'pit', x:hx, y, w, x0:hx-w/2, x1:hx+w/2 }); }
-    }
-    if (rnd() < 0.66)                                    // power-up crate (low inside tunnels, under the roof)
-      crates.push({ x: seg.x0 + len*(0.4+rnd()*0.25), y: tunnel ? y-40 : y-74, w:34, h:34, gotBy:[] });
-    cursor = seg.x1;
-    lastTunnel = tunnel;
   }
-  segments.push({ x0:cursor, x1:WORLD_LEN+700, y:GROUND_Y });   // flat run-in to the flag
-  return { theme, segments, obstacles, crates, hazards };
+  if (tier>0) ramp(0, 130);                                    // descend to ground for the finale
+
+  // ---- FINAL CHALLENGE before the flag: a big sweeping saw, or a wide spike pit ----
+  const finalType = rnd()<0.5 ? 'bigsaw' : 'spikepit';
+  if (finalType==='bigsaw'){
+    const p = platform(560);
+    hazards.push({ type:'saw', big:true, x:p.x0+280, y:GROUND_Y, range:150, spd:1.05+rnd()*0.3, phase:rnd()*6.283 });
+  } else {
+    platform(240);                                            // run-up
+    const pitW = 165 + rnd()*30;                              // wide — needs a well-timed (double) jump
+    hazards.push({ type:'spikepit', big:true, x0:cursor, x1:cursor+pitW, y:GROUND_Y });
+    cursor += pitW;                                           // the gap itself IS the spiked pit
+  }
+  segments.push({ x0:cursor, x1:WORLD_LEN+700, y:GROUND_Y });  // run-in to the flag
+  return { theme, segments, obstacles, crates, hazards, finalType };
 }
 
 // platform under x (null = over a chasm)
@@ -615,6 +624,10 @@ function segBefore(x){
   for (const s of S){ if (s.x1 <= x+1 && s.x1 > best.x1) best = s; }
   return best;
 }
+// ground height at world-x within a segment (ramps slope linearly); + edge helpers for voids/bridges
+function segGroundY(s, x){ if (!s.ramp) return s.y; const t=Math.max(0,Math.min(1,(x-s.x0)/(s.x1-s.x0))); return s.y0+(s.y1-s.y0)*t; }
+function segLeftY(s){ return s.ramp ? s.y0 : s.y; }
+function segRightY(s){ return s.ramp ? s.y1 : s.y; }
 
 //------------------------------------------------------------------
 //  RACERS
@@ -691,12 +704,13 @@ function useItem(r){
       spawnPuff(r.x, r.y, '#bfe8ff', 10); spawnRing(r.x, r.y-20, 'rgba(180,232,255,0.9)', 64, 0.4);
       if (r.isPlayer) screenShake(3); sfx('spring');
       break;
-    case 'magnet':{                                  // yank forward to just behind the racer ahead
+    case 'magnet':{                                  // modest forward pull — closes part of the gap, not to 1st
       const tgt = nearestAhead(r);
-      if (tgt){
-        for (let i=0;i<14;i++) spawnPuff(r.x + i*((tgt.x-r.x)/14), r.y-20, '#b06fff', 1);
-        spawnRing(tgt.x-56, r.y-26, 'rgba(176,111,255,0.9)', 60, 0.42);
-        r.x = tgt.x - 56; r.boostT = Math.max(r.boostT, 0.4); r.boostCol = '#c08bff';
+      const pull = tgt ? Math.min(220, Math.max(70, (tgt.x - r.x) * 0.4)) : 0;   // ≤220px, ~40% of the gap
+      if (pull > 0){
+        for (let i=0;i<10;i++) spawnPuff(r.x + i*(pull/10), r.y-20, '#b06fff', 1);
+        r.x += pull; r.boostT = Math.max(r.boostT, 0.5); r.boostCol = '#c08bff';
+        spawnRing(r.x, r.y-26, 'rgba(176,111,255,0.9)', 56, 0.4);
       } else r.boostT = 0.9;
       sfx('magnet');
       break;
@@ -840,15 +854,19 @@ function update(dt){
     r.y  += r.vy * dt;
     const seg = segAt(r.x);
     if (seg){
-      if (r.vy >= 0 && r.y >= seg.y){
+      const gy = segGroundY(seg, r.x);                  // ramps slope linearly; flats are constant
+      if (r.vy >= 0 && r.y >= gy){
         if (wasAir && r.vy > 250){ r.landT = 0.16;       // landing squash
           const pw = Math.min(1.4, r.vy/650);
           spawnLand(r.x, r.y, pw, themeDust());
           if (r.isPlayer) screenShake(2.4+pw*3);
         }
-        r.y = seg.y; r.vy = 0; r.onGround = true; r.jumps = 0;
+        r.y = gy; r.vy = 0; r.onGround = true; r.jumps = 0;
       }
-      else if (r.y < seg.y){ r.onGround = false; }
+      else if (!wasAir && gy > r.y && gy - r.y < 16){    // glue to a downhill ramp instead of launching off it
+        r.y = gy; r.vy = 0; r.onGround = true; r.jumps = 0;
+      }
+      else if (r.y < gy){ r.onGround = false; }
     } else {
       r.onGround = false;
       if (r.y > GROUND_Y + PIT_DEPTH){               // fell into a chasm
@@ -857,10 +875,10 @@ function update(dt){
         r.lastFallX = r.x;
         if (r.fallStreak >= 3){                       // safety net: a chasm you keep missing won't trap you forever
           const fwd = track.segments.find(s => s.x0 > r.x);
-          if (fwd){ r.x = fwd.x0 + 24; r.y = fwd.y; } else { r.x = back.x1 - 60; r.y = back.y; }
+          if (fwd){ r.x = fwd.x0 + 24; r.y = segGroundY(fwd, r.x); } else { r.x = back.x1 - 60; r.y = segGroundY(back, r.x); }
           r.fallStreak = 0; stun(r, 0.4);
         } else {
-          stun(r, 0.8); r.x = back.x1 - 60; r.y = back.y;   // respawn with runway to set up the jump
+          stun(r, 0.8); r.x = back.x1 - 60; r.y = segGroundY(back, r.x);   // respawn with runway to set up the jump
         }
         r.vy = 0; r.onGround = true; r.jumps = 0;
         spawnPuff(r.x, r.y, '#3a2a1a', 10); spawnRing(r.x, r.y, 'rgba(120,90,60,0.7)', 44, 0.4);
@@ -912,8 +930,8 @@ function update(dt){
       for (const hz of track.hazards){
         if (hz.type==='saw'){
           const sx = hz.x + Math.sin(raceTime*hz.spd + hz.phase)*hz.range;
-          if (r.stunT<=0 && Math.abs(r.x-sx) < 24 && (r.y - hz.y) > -28){   // jumped clear of the blade = safe
-            stun(r, 0.5); sfx('zap');
+          if (r.stunT<=0 && Math.abs(r.x-sx) < (hz.big?34:24) && (r.y - hz.y) > -(hz.big?40:28)){   // jump clear of the blade = safe
+            stun(r, hz.big?0.7:0.5); sfx('zap');
           }
         } else if (hz.type==='rock'){
           const ph = ((raceTime+hz.phase) % hz.period)/hz.period;
@@ -978,13 +996,14 @@ function updateAI(r, dt){
   if (r.onGround && r.stunT<=0 && seg){
     const distEdge = seg.x1 - r.x;
     const after = segAt(seg.x1 + 6);
-    const gapAhead = distEdge < 46 && (!after || after.y < seg.y - 4);   // leap CLOSE to the edge (keeps the arc for the gap)
+    const gapAhead = distEdge < 46 && !after;            // real chasm only — ramps/ledges are run up, not jumped
     const hurdleClose = track.obstacles.some(o => o.x>r.x && o.x-r.x<100 && o.x-r.x>0 && Math.abs(o.y-seg.y)<24);
-    // hop a sawblade sweeping toward us, or the near lip of a hazard pit (rocks are timing-based — AI just eats the rare brief trip)
+    // hop a sawblade sweeping toward us (bigger lead for a big end-saw), the near lip of a hazard pit, or the spike pit
     const hazClose = track.hazards && track.hazards.some(hz => {
-      if (Math.abs(hz.y-seg.y) > 24) return false;
-      if (hz.type==='saw'){ const sx=hz.x+Math.sin(raceTime*hz.spd+hz.phase)*hz.range; return sx>r.x && sx-r.x<88; }
+      if (hz.type!=='spikepit' && Math.abs(hz.y-seg.y) > 24) return false;
+      if (hz.type==='saw'){ const sx=hz.x+Math.sin(raceTime*hz.spd+hz.phase)*hz.range; return sx>r.x && sx-r.x<(hz.big?130:88); }
       if (hz.type==='pit'){ return hz.x0>r.x-12 && hz.x0-r.x<78; }
+      if (hz.type==='spikepit'){ return hz.x0>r.x-10 && hz.x0-r.x<60; }
       return false;
     });
     if ((gapAhead || hurdleClose || hazClose) && Math.random() < 0.97){ r.vy = -JUMP_V; r.onGround=false; r.jumps=1; }
@@ -1091,17 +1110,19 @@ function drawScaffolds(){
     if (gw<=2 || gw>340) continue;
     const lx=a.x1-camX, rx=b.x0-camX;
     if (rx<-50 || lx>VW+50) continue;
-    post(lx-6, a.y); post(rx+6, b.y);
-    const sag = 14 + gw*0.06, midx=(lx+rx)/2, midy=Math.max(a.y,b.y)+sag;
+    if (track.hazards.some(h=>h.type==='spikepit' && Math.abs(h.x0-a.x1)<8)) continue;   // no rope bridge over the spike pit
+    const ay=segRightY(a), by=segLeftY(b);
+    post(lx-6, ay); post(rx+6, by);
+    const sag = 14 + gw*0.06, midx=(lx+rx)/2, midy=Math.max(ay,by)+sag;
     // twin support ropes
     ctx.strokeStyle='#6f5236'; ctx.lineWidth=3; ctx.lineCap='round';
-    ctx.beginPath(); ctx.moveTo(lx,a.y); ctx.quadraticCurveTo(midx,midy, rx,b.y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(lx,ay); ctx.quadraticCurveTo(midx,midy, rx,by); ctx.stroke();
     ctx.strokeStyle='#8a6a44'; ctx.lineWidth=2;
-    ctx.beginPath(); ctx.moveTo(lx,a.y-7); ctx.quadraticCurveTo(midx,midy-7, rx,b.y-7); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(lx,ay-7); ctx.quadraticCurveTo(midx,midy-7, rx,by-7); ctx.stroke();
     // wooden planks along the curve
     for (let t=0.07;t<0.96;t+=0.10){
-      const px=lx+(rx-lx)*t, py=quad(a.y,midy,b.y,t);
-      const sl=quad(a.y,midy,b.y,t+0.04)-quad(a.y,midy,b.y,t-0.04);
+      const px=lx+(rx-lx)*t, py=quad(ay,midy,by,t);
+      const sl=quad(ay,midy,by,t+0.04)-quad(ay,midy,by,t-0.04);
       ctx.save(); ctx.translate(px,py-3); ctx.rotate(Math.atan2(sl,(rx-lx)*0.08));
       const pg=ctx.createLinearGradient(0,-3,0,4); pg.addColorStop(0,'#b88a52'); pg.addColorStop(1,'#875f33');
       ctx.fillStyle=pg; roundRect(-7,-3,14,6,2); ctx.fill();
@@ -1403,7 +1424,7 @@ function drawGround(T){
     const a=S[i], b=S[i+1], gw=b.x0-a.x1;
     if (gw<=2) continue;
     const gx=a.x1-camX; if (gx>VW || gx+gw<0) continue;
-    const top=Math.min(a.y,b.y);
+    const top=Math.min(segRightY(a), segLeftY(b));
     const pg=ctx.createLinearGradient(0,top,0,VH+16);
     pg.addColorStop(0,shade(T.abyss,0.12)); pg.addColorStop(0.5,T.abyss); pg.addColorStop(1,shade(T.abyss,-0.55));
     ctx.fillStyle=pg; ctx.fillRect(gx,top,gw,VH-top+16);
@@ -1412,11 +1433,11 @@ function drawGround(T){
     const wr=ctx.createLinearGradient(gx+gw-22,0,gx+gw,0); wr.addColorStop(0,'rgba(0,0,0,0)'); wr.addColorStop(1,'rgba(0,0,0,0.4)');
     ctx.fillStyle=wr; ctx.fillRect(gx+gw-22,top,22,VH-top);
   }
-  // --- platforms ---
+  // --- platforms & ramps ---
   for (const s of S){
     const x=s.x0-camX, w=s.x1-s.x0;
     if (x>VW || x+w<0) continue;
-    drawPlatform(x, s.y, w, T, s.x0);
+    if (s.ramp) drawRamp(s, T); else drawPlatform(x, s.y, w, T, s.x0);
   }
   // --- hurdles ---
   for (const o of track.obstacles){
@@ -1602,20 +1623,50 @@ function drawPit(x0, gy, w, T){
   ctx.fillStyle=gl; ctx.fillRect(x,gy-28,w,28); ctx.restore();
   ctx.fillStyle=rgba(T.glow,0.95); ctx.fillRect(x-1,gy-3,w+2,2.5);             // hot lip
 }
+// sloped ramp: earth wedge + grass cap along the slope (run up onto a raised platform)
+function drawRamp(s, T){
+  const x0=s.x0-camX, x1=s.x1-camX, y0=s.y0, y1=s.y1; if (x1<-2 || x0>VW) return;
+  ctx.beginPath(); ctx.moveTo(x0,y0); ctx.lineTo(x1,y1); ctx.lineTo(x1,VH+16); ctx.lineTo(x0,VH+16); ctx.closePath();
+  const dg=ctx.createLinearGradient(0,Math.min(y0,y1),0,VH); dg.addColorStop(0,shade(T.dirt,0.06)); dg.addColorStop(0.4,T.dirt); dg.addColorStop(1,T.dirtLo);
+  ctx.fillStyle=dg; ctx.fill();
+  ctx.fillStyle='rgba(0,0,0,0.16)'; ctx.fillRect(x0,Math.min(y0,y1)+12,3,VH); ctx.fillRect(x1-3,Math.min(y0,y1)+12,3,VH);
+  ctx.save(); ctx.lineJoin='round'; ctx.lineCap='round';
+  ctx.strokeStyle=T.grass2; ctx.lineWidth=18; ctx.beginPath(); ctx.moveTo(x0,y0+7); ctx.lineTo(x1,y1+7); ctx.stroke();
+  ctx.strokeStyle=T.grass;  ctx.lineWidth=12; ctx.beginPath(); ctx.moveTo(x0,y0+3); ctx.lineTo(x1,y1+3); ctx.stroke();
+  ctx.strokeStyle=T.grassLip;ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(x0,y0-1); ctx.lineTo(x1,y1-1); ctx.stroke();
+  ctx.restore();
+}
+// big end-of-map spike pit: row of metal spikes in the chasm + pulsing red warning lips
+function drawSpikePit(hz, T){
+  const x0=hz.x0-camX, x1=hz.x1-camX, gy=hz.y, w=x1-x0, baseY=gy+72;
+  const n=Math.max(4,Math.floor(w/22)), sw=w/n;
+  for(let i=0;i<n;i++){ const sx=x0+i*sw;
+    const g=ctx.createLinearGradient(0,baseY-36,0,baseY); g.addColorStop(0,'#eef1f6'); g.addColorStop(1,'#7c8595');
+    ctx.fillStyle=g; ctx.beginPath(); ctx.moveTo(sx,baseY); ctx.lineTo(sx+sw/2,baseY-36); ctx.lineTo(sx+sw,baseY); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,0.6)'; ctx.beginPath(); ctx.moveTo(sx+sw/2,baseY-36); ctx.lineTo(sx+sw/2-3,baseY-18); ctx.lineTo(sx+sw/2+1,baseY-18); ctx.closePath(); ctx.fill();
+  }
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  const pulse=0.5+0.5*Math.sin(raceTime*5);
+  ctx.fillStyle='rgba(255,70,70,'+(0.45*pulse)+')'; ctx.fillRect(x0-5,gy-3,7,94); ctx.fillRect(x1-2,gy-3,7,94);
+  ctx.restore();
+}
 function drawHazards(){
   if (!track.hazards) return;
   const T=THEME[track.theme];
   for (const hz of track.hazards){
     if (hz.type==='saw'){
       const wx=hz.x+Math.sin(raceTime*hz.spd+hz.phase)*hz.range, x=wx-camX;
-      if (x>VW+40||x<-40) continue;
+      if (x>VW+60||x<-60) continue;
       ctx.strokeStyle='rgba(0,0,0,0.22)'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(hz.x-hz.range-camX,hz.y-2); ctx.lineTo(hz.x+hz.range-camX,hz.y-2); ctx.stroke();
-      drawBlade(x, hz.y-13, 18, T);
+      drawBlade(x, hz.y-(hz.big?24:13), hz.big?36:18, T);
     } else if (hz.type==='rock'){
       const x=hz.x-camX; if (x>VW+40||x<-40) continue;
       const ph=((raceTime+hz.phase)%hz.period)/hz.period, ry=hz.top+(hz.y-hz.top)*ph, sh=0.25+ph*0.6;
       ctx.fillStyle=`rgba(0,0,0,${0.3*sh})`; ctx.beginPath(); ctx.ellipse(x,hz.y-2,13*sh+5,5,0,0,7); ctx.fill();
       drawRock(x, ry-13, T);
+    } else if (hz.type==='spikepit'){
+      if (hz.x1-camX<0||hz.x0-camX>VW) continue;
+      drawSpikePit(hz, T);
     } else {
       if (hz.x1-camX<0||hz.x0-camX>VW) continue;
       drawPit(hz.x0, hz.y, hz.w, T);

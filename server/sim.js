@@ -16,7 +16,7 @@
 // ---------------------------------------------------------------------------
 
 // ---- world / tuning (must stay in lockstep with index.html) ----
-const WORLD_LEN  = 9400;
+const WORLD_LEN  = 15800;
 const START_X    = 120;
 const GROUND_Y   = 430;
 const GRAVITY    = 1600;
@@ -38,7 +38,8 @@ function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a
 // pick a deterministic theme from the seed, independent of the track rng stream
 function themeForSeed(seed){ return THEME_KEYS[Math.abs((seed ^ 0x9e3779b9) >>> 0) % THEME_KEYS.length]; }
 
-// --- VERBATIM port of buildTrack from index.html (themeOverride always supplied) ---
+// --- VERBATIM port of buildTrack from index.html (themeOverride always supplied,
+//     so the rng stream — and therefore the track — matches the client byte-for-byte) ---
 function buildTrack(seed, themeOverride){
   const rnd = mulberry32(seed);
   const keys = THEME_KEYS;
@@ -46,46 +47,54 @@ function buildTrack(seed, themeOverride){
   const clampTier = v => Math.max(0, Math.min(TIERS.length-1, v));
   const segments = [], obstacles = [], crates = [], hazards = [];
   const hazType = HAZARD_BY_THEME[theme];
+  let cursor = 0, tier = 0;
 
-  segments.push({ x0:0, x1:780, y:GROUND_Y });
-  let cursor = 780, tier = 0;
+  const feature = (seg) => {
+    const len = seg.x1-seg.x0, prog = seg.x0/WORLD_LEN; let had=false;
+    if (len>200 && rnd()<0.30+prog*0.15){ obstacles.push({ x:seg.x0+80+rnd()*(len-160), w:26, h:32+rnd()*28+prog*20, y:seg.y }); had=true; }
+    if (hazType && !had && len>250 && rnd()<0.26+prog*0.15){
+      const hx=seg.x0+len*(0.4+rnd()*0.2);
+      if (hazType==='saw')       hazards.push({ type:'saw',  x:hx, y:seg.y, range:Math.min(64,(len-150)/2), spd:1.3+rnd()*0.9, phase:rnd()*6.283 });
+      else if (hazType==='rock') hazards.push({ type:'rock', x:hx, y:seg.y, period:1.5+rnd()*1.1, phase:rnd()*3, top:seg.y-(155+rnd()*70) });
+      else { const w=Math.min(86,56+rnd()*30); hazards.push({ type:'pit', x:hx, y:seg.y, w, x0:hx-w/2, x1:hx+w/2 }); }
+    }
+    if (rnd()<0.6) crates.push({ x:seg.x0+len*(0.4+rnd()*0.25), y:seg.y-74, w:34, h:34, gotBy:[] });
+  };
+  const platform = (len) => { const s={ x0:cursor, x1:cursor+len, y:TIERS[tier] }; segments.push(s); cursor=s.x1; return s; };
+  const ramp = (toTier, len) => { const s={ x0:cursor, x1:cursor+len, y0:TIERS[tier], y1:TIERS[toTier], y:TIERS[toTier], ramp:true }; segments.push(s); cursor=s.x1; tier=toTier; return s; };
 
-  let lastTunnel = false;
-  while (cursor < WORLD_LEN - 900){
-    const prog = cursor / WORLD_LEN;
-    let gap = 0, up = false;
-    if (lastTunnel){
-    } else if (rnd() < 0.36 + prog*0.20){
-      if (rnd() < 0.50){ tier = clampTier(tier+1); up = true; gap = 70 + rnd()*38 + prog*26; }
-      else { tier = clampTier(tier + (rnd()<0.5?0:-1)); gap = 92 + rnd()*52 + prog*40; }
-    } else if (rnd() < 0.5){
-      tier = clampTier(tier - 1);
+  segments.push({ x0:0, x1:760, y:GROUND_Y }); cursor=760;
+  const END = WORLD_LEN - 1500;
+  while (cursor < END){
+    const prog = cursor/WORLD_LEN, roll = rnd();
+    if (roll < 0.34){
+      ramp(clampTier(tier + (rnd()<0.35?2:1)), 100+rnd()*70);
+      feature(platform(220+rnd()*230));
+    } else if (roll < 0.52 && tier>0){
+      ramp(clampTier(tier - (rnd()<0.4?2:1)), 90+rnd()*70);
+      feature(platform(210+rnd()*220));
+    } else if (roll < 0.76){
+      if (rnd()<0.4) tier = clampTier(tier + (rnd()<0.5?1:-1));
+      cursor += 80 + rnd()*62 + prog*44;
+      feature(platform(220+rnd()*230));
+    } else {
+      feature(platform(240+rnd()*250));
     }
-    cursor += gap;
-    const y = TIERS[tier];
-    const tunnel = (!up && !lastTunnel && cursor > 1500 && rnd() < 0.17);
-    const len = tunnel ? (300 + rnd()*210) : (230 + rnd()*240);
-    const seg = { x0:cursor, x1:cursor+len, y };
-    if (tunnel){ seg.tunnel = true; seg.ceil = y - 76; }
-    segments.push(seg);
-    let hadHurdle = false;
-    if (!tunnel && len > 200 && rnd() < 0.32 + prog*0.18){
-      obstacles.push({ x: seg.x0 + 80 + rnd()*(len-160), w:26, h: 32 + rnd()*30 + prog*22, y });
-      hadHurdle = true;
-    }
-    if (hazType && !tunnel && !hadHurdle && len > 250 && rnd() < 0.30 + prog*0.18){
-      const hx = seg.x0 + len*(0.40 + rnd()*0.20);
-      if (hazType==='saw')       hazards.push({ type:'saw',  x:hx, y, range:Math.min(64,(len-150)/2), spd:1.3+rnd()*0.9, phase:rnd()*6.283 });
-      else if (hazType==='rock') hazards.push({ type:'rock', x:hx, y, period:1.5+rnd()*1.1, phase:rnd()*3, top:y-(155+rnd()*70) });
-      else { const w=Math.min(86,56+rnd()*30); hazards.push({ type:'pit', x:hx, y, w, x0:hx-w/2, x1:hx+w/2 }); }
-    }
-    if (rnd() < 0.66)
-      crates.push({ x: seg.x0 + len*(0.4+rnd()*0.25), y: tunnel ? y-40 : y-74, w:34, h:34, gotBy:[] });
-    cursor = seg.x1;
-    lastTunnel = tunnel;
+  }
+  if (tier>0) ramp(0, 130);
+
+  const finalType = rnd()<0.5 ? 'bigsaw' : 'spikepit';
+  if (finalType==='bigsaw'){
+    const p = platform(560);
+    hazards.push({ type:'saw', big:true, x:p.x0+280, y:GROUND_Y, range:150, spd:1.05+rnd()*0.3, phase:rnd()*6.283 });
+  } else {
+    platform(240);
+    const pitW = 165 + rnd()*30;
+    hazards.push({ type:'spikepit', big:true, x0:cursor, x1:cursor+pitW, y:GROUND_Y });
+    cursor += pitW;
   }
   segments.push({ x0:cursor, x1:WORLD_LEN+700, y:GROUND_Y });
-  return { theme, segments, obstacles, crates, hazards };
+  return { theme, segments, obstacles, crates, hazards, finalType };
 }
 
 function segAt(track, x){
@@ -98,13 +107,15 @@ function segBefore(track, x){
   for (const s of S){ if (s.x1 <= x+1 && s.x1 > best.x1) best = s; }
   return best;
 }
+// ground height at world-x within a segment (ramps slope linearly)
+function segGroundY(s, x){ if (!s.ramp) return s.y; const t=Math.max(0,Math.min(1,(x-s.x0)/(s.x1-s.x0))); return s.y0+(s.y1-s.y0)*t; }
 
 // ---------------------------------------------------------------------------
 //  Race — authoritative state machine
 // ---------------------------------------------------------------------------
 const DT = 1/30;          // fixed timestep (determinism)
 const FINISH_GRACE = 4.0; // sec to keep simulating after the winner finishes
-const MAX_RACE_T   = 90;  // hard cap so a stuck race can't run forever
+const MAX_RACE_T   = 130; // hard cap so a stuck race can't run forever (maps are ~1 min)
 
 class Race {
   // entrants: [{ id, name, char, isBot }]
@@ -146,12 +157,13 @@ class Race {
     if (r.onGround && r.stunT <= 0 && seg){
       const distEdge = seg.x1 - r.x;
       const after = segAt(this.track, seg.x1 + 6);
-      const gapAhead = distEdge < 46 && (!after || after.y < seg.y - 4);
+      const gapAhead = distEdge < 46 && !after;            // real chasm only — ramps are run up
       const hurdleClose = this.track.obstacles.some(o => o.x>r.x && o.x-r.x<100 && o.x-r.x>0 && Math.abs(o.y-seg.y)<24);
       const hazClose = this.track.hazards.some(hz => {
-        if (Math.abs(hz.y-seg.y) > 24) return false;
-        if (hz.type==='saw'){ const sx=hz.x+Math.sin(this.t*hz.spd+hz.phase)*hz.range; return sx>r.x && sx-r.x<88; }
+        if (hz.type!=='spikepit' && Math.abs(hz.y-seg.y) > 24) return false;
+        if (hz.type==='saw'){ const sx=hz.x+Math.sin(this.t*hz.spd+hz.phase)*hz.range; return sx>r.x && sx-r.x<(hz.big?130:88); }
         if (hz.type==='pit'){ return hz.x0>r.x-12 && hz.x0-r.x<78; }
+        if (hz.type==='spikepit'){ return hz.x0>r.x-10 && hz.x0-r.x<60; }
         return false;
       });
       if ((gapAhead || hurdleClose || hazClose) && this.rng() < 0.97){ r.vy = -JUMP_V; r.onGround=false; r.jumps=1; }
@@ -202,8 +214,10 @@ class Race {
       r.y  += r.vy * dt;
       const seg = segAt(this.track, r.x);
       if (seg){
-        if (r.vy >= 0 && r.y >= seg.y){ r.y = seg.y; r.vy = 0; r.onGround = true; r.jumps = 0; }
-        else if (r.y < seg.y){ r.onGround = false; }
+        const gy = segGroundY(seg, r.x);                  // ramps slope linearly; flats are constant
+        if (r.vy >= 0 && r.y >= gy){ r.y = gy; r.vy = 0; r.onGround = true; r.jumps = 0; }
+        else if (!wasAir && gy > r.y && gy - r.y < 16){ r.y = gy; r.vy = 0; r.onGround = true; r.jumps = 0; }  // glue to a downhill ramp
+        else if (r.y < gy){ r.onGround = false; }
       } else {
         r.onGround = false;
         if (r.y > GROUND_Y + PIT_DEPTH){
@@ -212,10 +226,10 @@ class Race {
           r.lastFallX = r.x;
           if (r.fallStreak >= 3){
             const fwd = this.track.segments.find(s => s.x0 > r.x);
-            if (fwd){ r.x = fwd.x0 + 24; r.y = fwd.y; } else { r.x = back.x1 - 60; r.y = back.y; }
+            if (fwd){ r.x = fwd.x0 + 24; r.y = segGroundY(fwd, r.x); } else { r.x = back.x1 - 60; r.y = segGroundY(back, r.x); }
             r.fallStreak = 0; this.stun(r, 0.4);
           } else {
-            this.stun(r, 0.8); r.x = back.x1 - 60; r.y = back.y;
+            this.stun(r, 0.8); r.x = back.x1 - 60; r.y = segGroundY(back, r.x);
           }
           r.vy = 0; r.onGround = true; r.jumps = 0;
         }
@@ -239,7 +253,7 @@ class Race {
       for (const hz of this.track.hazards){
         if (hz.type==='saw'){
           const sx = hz.x + Math.sin(this.t*hz.spd + hz.phase)*hz.range;
-          if (r.stunT<=0 && Math.abs(r.x-sx) < 24 && (r.y - hz.y) > -28) this.stun(r, 0.5);
+          if (r.stunT<=0 && Math.abs(r.x-sx) < (hz.big?34:24) && (r.y - hz.y) > -(hz.big?40:28)) this.stun(r, hz.big?0.7:0.5);
         } else if (hz.type==='rock'){
           const ph = ((this.t+hz.phase) % hz.period)/hz.period;
           const ry = hz.top + (hz.y - hz.top)*ph;
