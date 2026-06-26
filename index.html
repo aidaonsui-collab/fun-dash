@@ -400,7 +400,8 @@ CHARS.forEach(c => { const im = new Image(); im.src = 'assets/' + c.id + '.png';
 const SHEET_V = '8';   // bump to bust any stale browser cache of the run-cycle strips
 const SHEET = {
   hippo: { src:'assets/hippo_run.png?v='+SHEET_V, frames:4 },
-  blub:  { src:'assets/blub_run.png?v='+SHEET_V,  frames:2 },   // dropped 2 backward-facing frames
+  // blub: strip is low-res with a wrong (tall-narrow) cell aspect that squished the wide fish —
+  //       left out of SHEET so it renders from the clean static PFP (correct proportions + bounce).
   miu:   { src:'assets/miu_run.png?v='+SHEET_V,   frames:2 },   // dropped 2 frames (white-smear artifacts)
   lofi:  { src:'assets/lofi_run.png?v='+SHEET_V,  frames:4 },
   axol:  { src:'assets/axol_run.png?v='+SHEET_V,  frames:3 },   // dropped 1 frame (neck smear)
