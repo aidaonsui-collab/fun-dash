@@ -191,6 +191,11 @@
   .lbRow.me{ background:rgba(255,207,63,.18) } .lbRow.pin{ background:rgba(255,207,63,.14); position:sticky; top:0 }
   .lbRow .rk{ width:30px;color:var(--muted);font-weight:bold } .lbRow.top3 .rk{ color:var(--accent) }
   .lbRow .nm{ flex:1;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap } .lbRow .sc{ color:#cfd6f0;font-variant-numeric:tabular-nums;font-weight:bold }
+  .lbRow .rcAv{ width:32px;height:32px;border-radius:50%;flex:none;background:rgba(255,255,255,.08);object-fit:cover }
+  .lbRow .rcInfo{ flex:1;display:flex;flex-direction:column;line-height:1.2;min-width:0 }
+  .lbRow .rcInfo b{ color:#fff } .lbRow .rcInfo small{ color:var(--muted);font-size:11px }
+  .lbRow .rcSui{ color:#7fe0b0;font-weight:bold;font-variant-numeric:tabular-nums;min-width:58px;text-align:right }
+  .lbRow.dim{ opacity:.5 }
   /* contact note + X share */
   .contactNote{ margin-top:13px; font-size:12.5px; color:var(--muted) }
   .contactNote a{ color:var(--accent); font-weight:bold; text-decoration:none }
@@ -281,6 +286,7 @@
         <h1>🏆 <span class="a">LEADERBOARD</span></h1>
         <div class="lbTabs">
           <button class="lbTabBtn active" data-tab="global">🌐 Global</button>
+          <button class="lbTabBtn" data-tab="racers">🏃 Racers</button>
           <button class="lbTabBtn" data-tab="best">⏱ Best Times</button>
         </div>
         <div class="lbWrap">
@@ -455,6 +461,19 @@ let lbTab = 'global';      // leaderboard tab
 let lastBestImproved = false;
 let bestTimes = (function(){ try{ return JSON.parse(localStorage.getItem('fd_best'))||{}; }catch(e){ return {}; } })();
 function saveBest(){ try{ localStorage.setItem('fd_best', JSON.stringify(bestTimes)); }catch(e){} }
+
+// ---- per-character stats (races/wins/podiums/best time/SUI won), keyed by char id ----
+let charStats = (function(){ try{ return JSON.parse(localStorage.getItem('fd_charstats'))||{}; }catch(e){ return {}; } })();
+function saveCharStats(){ try{ localStorage.setItem('fd_charstats', JSON.stringify(charStats)); }catch(e){} }
+function cstat(id){ return charStats[id] || (charStats[id] = {games:0,wins:0,podiums:0,best:null,sui:0}); }
+// record one race result for the character at CHARS[idx]; finishTime null = don't touch best (online tracks place only)
+function recordChar(idx, place, n, finishTime){
+  const c = cstat(CHARS[idx].id);
+  c.games++; if (place===1) c.wins++; if (place<=3) c.podiums++;
+  if (finishTime!=null && (c.best==null || finishTime<c.best)) c.best = +finishTime.toFixed(2);
+  saveCharStats();
+}
+function recordCharSui(idx, sui){ const c=cstat(CHARS[idx].id); c.sui = +(((c.sui||0)+sui)).toFixed(4); saveCharStats(); }
 function saveStats(){ try{ localStorage.setItem('fd_stats', JSON.stringify(stats)); }catch(e){} }
 function savePlayerName(n){ playerName=((n||'').trim().slice(0,14))||playerName; try{ localStorage.setItem('fd_name', playerName); }catch(e){} }
 
@@ -2054,6 +2073,7 @@ function endRace(){
     stats.rating += lastGain;
   } else { lastGain = 0; }
   saveStats();
+  recordChar(chosenChar, myPlace, racers.length, me.finished ? me.finishTime : null);   // per-character stats
   // --- title ---
   document.getElementById('resultTitle').innerHTML =
     gameMode==='freeplay' ? (me.finished?'⏱ TIME TRIAL':'DNF 😵')
@@ -2096,6 +2116,7 @@ function endRace(){
 
 // ----- leaderboard (local, seeded with global-style players) -----
 function renderLeaderboard(){
+  if (lbTab==='racers'){ renderRacers(); return; }
   const winPct = stats.games ? Math.round(100*stats.wins/stats.games) : 0;
   document.getElementById('lbStats').innerHTML =
     `<div class="big">${stats.rating.toLocaleString()}</div><div class="biglbl">your rating</div>`+
@@ -2137,6 +2158,30 @@ function renderLeaderboard(){
   });
   // auto-scroll so your highlighted rank is visible (you usually start near the bottom)
   if (meRow) setTimeout(()=>{ list.scrollTop = Math.max(0, meRow.offsetTop - list.clientHeight/2); }, 40);
+}
+// ----- per-character stats tab: each racer's races / wins / best / SUI won -----
+function renderRacers(){
+  const tot = CHARS.reduce((a,c)=>{ const s=charStats[c.id]; if(s){ a.games+=s.games; a.wins+=s.wins; a.sui+=s.sui||0; } return a; }, {games:0,wins:0,sui:0});
+  const played = CHARS.filter(c=>charStats[c.id]&&charStats[c.id].games).length;
+  document.getElementById('lbStats').innerHTML =
+    `<div class="big">Ⓢ ${tot.sui.toFixed(2)}</div><div class="biglbl">total SUI won</div>`+
+    `<div class="row"><span>Total races</span><b>${tot.games}</b></div>`+
+    `<div class="row"><span>Total wins</span><b>${tot.wins}</b></div>`+
+    `<div class="row"><span>Win rate</span><b>${tot.games?Math.round(100*tot.wins/tot.games):0}%</b></div>`+
+    `<div class="row"><span>Racers played</span><b>${played}/${CHARS.length}</b></div>`;
+  const list=document.getElementById('lbList'); list.innerHTML='';
+  const rows = CHARS.map(c=>({c, s: charStats[c.id]||{games:0,wins:0,podiums:0,best:null,sui:0}}));
+  rows.sort((a,b)=> b.s.games-a.s.games || b.s.wins-a.s.wins || (a.c.name<b.c.name?-1:1));
+  rows.forEach(({c,s})=>{
+    const wr = s.games?Math.round(100*s.wins/s.games):0;
+    const row=document.createElement('div'); row.className='lbRow'+(s.games?'':' dim');
+    row.innerHTML =
+      `<img class="rcAv" src="assets/${c.id}.png" onerror="this.style.visibility='hidden'">`+
+      `<span class="rcInfo"><b>$${esc(c.name)}</b><small>${s.games} race${s.games===1?'':'s'}${s.podiums?' · '+s.podiums+' 🏅':''}${s.best!=null?' · '+s.best.toFixed(2)+'s':''}</small></span>`+
+      `<span class="sc">${s.wins}W · ${wr}%</span>`+
+      `<span class="rcSui">${s.sui?('Ⓢ '+(+s.sui).toFixed(2)):''}</span>`;
+    list.appendChild(row);
+  });
 }
 function showLeaderboard(){ renderLeaderboard(); document.getElementById('leaderboard').classList.remove('hidden'); }
 function shareToX(){
@@ -2298,6 +2343,7 @@ async function settleSuiRace(won){
   try{
     await window.FunSui.settle(suiRace.roomId, won ? window.FunSui.address : suiRace.houseAddr);
     const pot = suiRace.stake*2, payout = pot*0.9;
+    if (won) recordCharSui(chosenChar, payout);
     el.textContent = won ? `⛓️ 🏆 Winner paid ${payout.toFixed(3)} SUI on-chain (pot ${pot} − 10% fee → dev)`
                          : `⛓️ 😵 House took the pot — ${payout.toFixed(3)} SUI; 10% fee → dev`;
   }catch(e){ el.textContent = '⛓️ ⚠️ Settle failed: '+(e.message||e); }
@@ -2531,6 +2577,8 @@ function onNetResult(m){
   const order = m.order||[];
   const mine = order.find(o=>o.id===myNetId);
   const myPlace = mine ? mine.place : order.length;
+  recordChar(chosenChar, myPlace, order.length, null);     // per-character stats (online tracks place, not time)
+  if (m.settle && m.settle.payout!=null && myPlace===1) recordCharSui(chosenChar, Number(m.settle.payout)/1e9);
   const charOf = ci => CHARS[Math.max(0,Math.min(CHARS.length-1,ci|0))];
   document.getElementById('resultTitle').innerHTML =
     myPlace===1 ? '🏆 YOU WIN!' : (myPlace>=order.length ? 'LAST… 😵' : `${ordinal(myPlace)} place!`);
