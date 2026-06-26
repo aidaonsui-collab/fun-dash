@@ -288,9 +288,10 @@
       <div class="card">
         <h1>🏆 <span class="a">LEADERBOARD</span></h1>
         <div class="lbTabs">
-          <button class="lbTabBtn active" data-tab="global">🌐 Global</button>
+          <button class="lbTabBtn active" data-tab="champions">🏆 Champions</button>
           <button class="lbTabBtn" data-tab="racers">🏃 Racers</button>
           <button class="lbTabBtn" data-tab="best">⏱ Best Times</button>
+          <button class="lbTabBtn" data-tab="global">🌐 Global</button>
         </div>
         <div class="lbWrap">
           <div class="lbStats" id="lbStats"></div>
@@ -331,6 +332,7 @@
         <h1>🌐 <span class="a">ONLINE PvP</span></h1>
         <p class="sub">Real-time racing vs real players · the server runs the race, so wins can't be faked</p>
         <div id="netStatus" class="suiStatus"></div>
+        <div id="netProfile" style="margin:6px 0 10px;min-height:22px"></div>
         <div id="netModes">
           <button class="btn" id="netCasual">⚡ Quick Match</button>
           <p class="sub" style="margin:14px 0 6px">Staked PvP — both players stake, winner takes pot − 10% · <b>TESTNET</b>:</p>
@@ -469,7 +471,7 @@ let stats = loadStats();
 let lastGain = 0;
 let gameMode = 'race';     // 'race' (rating) | 'freeplay' (time trial) | 'sui' (on-chain stake)
 let suiRace = null;        // active on-chain staked race {roomId, houseAddr, stake, settled}
-let lbTab = 'global';      // leaderboard tab
+let lbTab = 'champions';   // leaderboard tab (live wallet-bound board by default)
 let lastBestImproved = false;
 let bestTimes = (function(){ try{ return JSON.parse(localStorage.getItem('fd_best'))||{}; }catch(e){ return {}; } })();
 function saveBest(){ try{ localStorage.setItem('fd_best', JSON.stringify(bestTimes)); }catch(e){} }
@@ -2178,6 +2180,7 @@ function endRace(){
 
 // ----- leaderboard (local, seeded with global-style players) -----
 function renderLeaderboard(){
+  if (lbTab==='champions'){ loadLiveLeaderboard(); return; }
   if (lbTab==='racers'){ renderRacers(); return; }
   const winPct = stats.games ? Math.round(100*stats.wins/stats.games) : 0;
   document.getElementById('lbStats').innerHTML =
@@ -2538,6 +2541,7 @@ function roundRect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w
 const NET_URL = new URLSearchParams(location.search).get('server')
   || 'wss://fun-dash-server-production.up.railway.app';
 let net=null, online=false, myNetId=null, netById={}, netStake=0, lastWasOnline=false, netGotSnap=false;
+let myProfile=null, isAdmin=false;   // wallet-bound identity (set after auth)
 const $net = (id)=>document.getElementById(id);
 function sendNet(m){ try{ if(net && net.readyState===1) net.send(JSON.stringify(m)); }catch(e){} }
 function netProg(msg){ const p=$net('netProgress'); p.classList.remove('hidden'); p.textContent=msg; }
@@ -2583,6 +2587,15 @@ async function onNetMsg(m){
     case 'result': onNetResult(m); break;
     case 'error': netProg('⚠️ '+m.msg); setTimeout(netShowModes, 1800); break;
     case 'cancelled': netShowModes(); break;
+    case 'profile':
+      myProfile = m.profile; isAdmin = !!m.isAdmin;
+      if (m.profile && m.profile.name){ savePlayerName(m.profile.name); if(nameInput) nameInput.value=playerName; }
+      renderNetProfile(m.needsName);
+      break;
+    case 'auth_err': renderNetProfile(false, '⚠️ '+m.msg); break;
+    case 'name_err': renderNetProfile(true, '⚠️ '+m.msg); break;
+    case 'leaderboard': case 'admin_ok': renderLiveLeaderboard(m.rows); break;
+    case 'admin_err': renderLiveLeaderboard(null, '⚠️ '+m.msg); break;
   }
 }
 
@@ -2670,6 +2683,77 @@ function onNetResult(m){
   document.getElementById('results').classList.remove('hidden');
 }
 
+// ---- wallet-bound identity: sign-in, set-once name, admin moderation ----
+let liveRows = [];
+async function authProfile(){
+  if(!window.FunSui || !window.FunSui.hasWallet()){ renderNetProfile(false,'No Sui wallet — install Slush (Testnet).'); return; }
+  try{ await window.FunSui.connect(); }catch(e){ renderNetProfile(false,'⚠️ '+(e.message||e)); return; }
+  if(!(net&&net.readyState===1)){ try{ await connectNet(); }catch(e){ renderNetProfile(false,'⚠️ server offline'); return; } }
+  const addr=window.FunSui.address, msg=`Fun Dash login ${addr} ts:${Date.now()}`;
+  renderNetProfile(false,'Sign the message in your wallet…');
+  try{ const s=await window.FunSui.signMessage(msg); sendNet({t:'auth', addr, message:s.message, signature:s.signature}); }
+  catch(e){ renderNetProfile(false,'⚠️ '+(e.message||e)); }
+}
+async function claimProfileName(name){
+  name=(name||'').trim(); if(name.length<2){ renderNetProfile(true,'Name must be at least 2 characters.'); return; }
+  const addr=window.FunSui.address, msg=`Fun Dash claim name "${name}" for ${addr} ts:${Date.now()}`;
+  renderNetProfile(true,'Sign to claim…');
+  try{ const s=await window.FunSui.signMessage(msg); sendNet({t:'claim_name', addr, name, message:s.message, signature:s.signature}); }
+  catch(e){ renderNetProfile(true,'⚠️ '+(e.message||e)); }
+}
+async function adminAction(target, patch){
+  const action = patch.banned!==undefined?'ban':patch.hidden!==undefined?'hide':'rename';
+  const addr=window.FunSui.address, msg=`Fun Dash admin ${action} ${target} for ${addr} ts:${Date.now()}`;
+  try{ const s=await window.FunSui.signMessage(msg); sendNet(Object.assign({t:'admin', addr, wallet:target, message:s.message, signature:s.signature}, patch)); }
+  catch(e){ alert('⚠️ '+(e.message||e)); }
+}
+function renderNetProfile(needsName, note){
+  const el=$net('netProfile'); if(!el) return;
+  if(myProfile && myProfile.name){
+    el.innerHTML = `<b style="color:var(--accent)">👤 ${esc(myProfile.name)}</b>`+
+      (isAdmin?' <span style="font-size:11px;color:#7fe0b0">· admin</span>':'')+
+      ` <span style="font-size:12px;color:var(--muted)">· ${myProfile.wins||0}W · Ⓢ ${(+myProfile.sui||0).toFixed(2)}</span>`;
+  } else if(needsName){
+    el.innerHTML = `<div style="font-size:13px;margin-bottom:6px">Pick a permanent racer name (locked once set, must be unique):</div>`+
+      `<div style="display:flex;gap:6px;justify-content:center"><input id="netNameInput" maxlength="16" placeholder="Your name" style="width:150px;padding:8px 10px;border-radius:9px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.08);color:#fff;font:inherit;text-align:center"><button class="btn sm" id="netNameGo">Claim ✍️</button></div>`+
+      (note?`<div style="font-size:12px;color:#ffd24a;margin-top:6px">${esc(note)}</div>`:'');
+    const go=$net('netNameGo'), inp=$net('netNameInput');
+    if(go) go.onclick=()=>claimProfileName(inp.value);
+    if(inp) inp.onkeydown=e=>{ if(e.key==='Enter') claimProfileName(inp.value); };
+  } else {
+    el.innerHTML = `<button class="btn ghost sm" id="netSignIn">👤 Sign in to set your racer name</button>`+
+      (note?`<div style="font-size:12px;color:#ffd24a;margin-top:6px">${esc(note)}</div>`:'');
+    const b=$net('netSignIn'); if(b) b.onclick=()=>authProfile();
+  }
+}
+async function loadLiveLeaderboard(){
+  document.getElementById('lbList').innerHTML='<div class="lbRow">Loading live leaderboard…</div>'; document.getElementById('lbStats').innerHTML='';
+  if(!(net&&net.readyState===1)){ try{ await connectNet(); }catch(e){ renderLiveLeaderboard(null,'Game server offline.'); return; } }
+  sendNet({t:'leaderboard'});
+}
+function renderLiveLeaderboard(rows, err){
+  const list=document.getElementById('lbList'), stats=document.getElementById('lbStats'); if(!list) return;
+  if(err){ list.innerHTML='<div class="lbRow" style="color:#ffd24a">'+esc(err)+'</div>'; return; }
+  if(rows) liveRows=rows;
+  stats.innerHTML =
+    `<div class="big">${liveRows.length}</div><div class="biglbl">named racers</div>`+
+    `<div class="row"><span>Total SUI won</span><b>Ⓢ ${liveRows.reduce((a,r)=>a+(+r.sui||0),0).toFixed(2)}</b></div>`+
+    `<div class="row"><span>Total wins</span><b>${liveRows.reduce((a,r)=>a+(r.wins||0),0)}</b></div>`+
+    (isAdmin?`<div class="row"><span style="color:#7fe0b0">🛡️ admin mode</span><b></b></div>`:'');
+  list.innerHTML='';
+  if(!liveRows.length){ list.innerHTML='<div class="lbRow" style="color:var(--muted)">No named racers yet — sign in & claim a name to be first.</div>'; return; }
+  liveRows.forEach((r,i)=>{
+    const row=document.createElement('div'); row.className='lbRow'+(i<3?' top3':'')+(myProfile&&r.wallet===myProfile.wallet?' me':'');
+    row.innerHTML=`<span class="rk">${i+1}</span><span class="nm">${esc(r.name)}</span><span class="sc">${r.wins||0}W · Ⓢ ${(+r.sui||0).toFixed(2)}</span>`;
+    if(isAdmin){ const a=document.createElement('span'); a.style.cssText='display:flex;gap:4px;margin-left:6px';
+      a.innerHTML=`<button class="btn ghost sm" data-h title="hide from board">🙈</button><button class="btn ghost sm" data-b title="ban wallet">⛔</button>`;
+      a.querySelector('[data-h]').onclick=()=>adminAction(r.wallet,{hidden:true});
+      a.querySelector('[data-b]').onclick=()=>{ if(confirm('Ban '+r.name+'?')) adminAction(r.wallet,{banned:true}); };
+      row.appendChild(a); }
+    list.appendChild(row);
+  });
+}
+
 // ---- online panel flow ----
 function netShowModes(){ $net('netModes').style.display=''; $net('netProgress').classList.add('hidden'); $net('netCancel').style.display='none'; $net('netCustomRow').classList.add('hidden'); }
 function netShowQueue(){ $net('netModes').style.display='none'; $net('netCancel').style.display=''; }
@@ -2680,6 +2764,7 @@ async function showNet(){
   const status=$net('netStatus'); status.textContent='Connecting to game server…';
   try{ await connectNet(); status.textContent='Connected ✓ — pick a mode.'; }
   catch(e){ status.innerHTML='⚠️ Game server offline. Start it with <code>node server.js</code> in <code>funrun-game/server</code>, then reopen.'; }
+  renderNetProfile(false);   // show the sign-in / racer-name area
 }
 async function queueCasual(){
   if (!(net&&net.readyState===1)){ try{ await connectNet(); }catch(e){ netProg('⚠️ '+(e.message||e)); return; } }
@@ -2786,6 +2871,14 @@ async function keyExec(kp, tx){            // sign+execute with an in-page (hous
   if (r.effects?.status?.status !== 'success') throw new Error('house tx failed: '+JSON.stringify(r.effects?.status));
   return r;
 }
+// sign a plain message with the connected wallet (proves ownership for profile claim / admin)
+async function signMessage(msg){
+  if (!S.address) await connect();
+  const f = S.wallet.features['sui:signPersonalMessage'];
+  if (!f) throw new Error('this wallet cannot sign messages');
+  const r = await f.signPersonalMessage({ message: new TextEncoder().encode(msg), account: S.account });
+  return { message: msg, signature: r.signature };
+}
 
 // ---- reads ----
 async function getConfig(){
@@ -2882,7 +2975,7 @@ async function joinStakedRoom(room, stakeSui){
   return room;
 }
 
-window.FunSui = { ...S, connect, getConfig, getBalance, playStaked, settle,
+window.FunSui = { ...S, connect, getConfig, getBalance, playStaked, settle, signMessage,
   createStakedRoom, joinStakedRoom, houseAddress, houseBalance, houseSecret, sweepHouse,
   sui2mist, mist2sui, PKG, CONFIG, NET, get address(){ return S.address; },
   hasWallet:()=>!!findWallet(), wallets:()=>listWallets().map(w=>w.name||'?'), walletName:()=>S.wallet&&S.wallet.name };
