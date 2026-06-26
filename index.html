@@ -336,9 +336,17 @@
           <p class="sub" style="margin:14px 0 6px">Staked PvP — both players stake, winner takes pot − 10% · <b>TESTNET</b>:</p>
           <div class="btnRow" id="netTiers">
             <button class="btn ghost sm" data-stake="0.1">0.1 SUI</button>
-            <button class="btn ghost sm" data-stake="0.5">0.5 SUI</button>
             <button class="btn ghost sm" data-stake="1">1 SUI</button>
+            <button class="btn ghost sm" data-stake="5">5 SUI</button>
+            <button class="btn ghost sm" data-stake="10">10 SUI</button>
+            <button class="btn ghost sm" id="netCustomBtn">✏️ Custom</button>
           </div>
+          <div id="netCustomRow" class="hidden" style="margin-top:10px;display:flex;gap:8px;justify-content:center;align-items:center">
+            <input id="netCustomAmt" type="number" min="0.01" step="0.1" inputmode="decimal" placeholder="Entry fee (SUI)"
+              style="width:150px;padding:9px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.08);color:#fff;font:inherit;text-align:center">
+            <button class="btn sm" id="netCustomGo">Stake ⛓️</button>
+          </div>
+          <p class="sub" style="margin:10px 0 0;font-size:11px;opacity:.7">Both players must pick the same amount to be matched.</p>
         </div>
         <div id="netProgress" class="suiProg hidden"></div>
         <button class="btn ghost sm" id="netCancel" style="margin-top:14px;display:none">CANCEL</button>
@@ -2663,7 +2671,7 @@ function onNetResult(m){
 }
 
 // ---- online panel flow ----
-function netShowModes(){ $net('netModes').style.display=''; $net('netProgress').classList.add('hidden'); $net('netCancel').style.display='none'; }
+function netShowModes(){ $net('netModes').style.display=''; $net('netProgress').classList.add('hidden'); $net('netCancel').style.display='none'; $net('netCustomRow').classList.add('hidden'); }
 function netShowQueue(){ $net('netModes').style.display='none'; $net('netCancel').style.display=''; }
 async function showNet(){
   audioInit(); savePlayerName(nameInput.value);
@@ -2694,6 +2702,10 @@ function leaveNet(){ if(net&&net.readyState===1) sendNet({t:'cancel'}); online=f
 $net('netBtn').onclick = ()=>showNet();
 $net('netCasual').onclick = ()=>queueCasual();
 $net('netTiers').addEventListener('click', e=>{ const b=e.target.closest('button[data-stake]'); if(b) queueStaked(parseFloat(b.dataset.stake)); });
+$net('netCustomBtn').onclick = ()=>{ const r=$net('netCustomRow'); r.classList.toggle('hidden'); if(!r.classList.contains('hidden')) $net('netCustomAmt').focus(); };
+$net('netCustomGo').onclick = ()=>{ const v=parseFloat($net('netCustomAmt').value);
+  if(!(v>0)){ $net('netCustomAmt').focus(); return; } queueStaked(+v.toFixed(4)); };
+$net('netCustomAmt').addEventListener('keydown', e=>{ if(e.key==='Enter') $net('netCustomGo').click(); });
 $net('netCancel').onclick = ()=>{ sendNet({t:'cancel'}); netShowModes(); };
 $net('netBack').onclick = ()=>{ leaveNet(); $net('netpanel').classList.add('hidden'); showMenu(); };
 
