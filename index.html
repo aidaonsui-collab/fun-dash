@@ -91,6 +91,14 @@
   }
   @keyframes rnSpin{ 0%,38%{ transform:rotate(0) } 58%,100%{ transform:rotate(-90deg) } }
 
+  /* phones in landscape: fill the WHOLE screen edge-to-edge (the canvas view is widened to match — see fitView()) */
+  @media (pointer:coarse) and (orientation:landscape){
+    body{ overflow:hidden }
+    #wrap{ width:100vw; height:100vh; height:100dvh }
+    #stage{ width:100%; height:100%; aspect-ratio:auto; border-radius:0; box-shadow:none }
+    #stage::after{ display:none }
+  }
+
   /* ---------- overlays ---------- */
   .overlay{
     position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
@@ -364,7 +372,20 @@
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
-const VW = 960, VH = 540;
+let VW = 960; const VH = 540;
+// On phones, widen the rendered view to the screen's aspect ratio so the game fills the WHOLE
+// screen — more track visible, no letterbox bars, no distortion. Desktop / portrait stay 16:9.
+function fitView(){
+  let vw = 960;
+  if (matchMedia('(pointer:coarse)').matches){
+    const aspect = (window.innerWidth||960) / Math.max(1, window.innerHeight||540);
+    vw = Math.max(960, Math.min(1600, Math.round(VH * aspect)));   // never narrower than 16:9; cap ultra-wide
+  }
+  if (vw !== VW){ VW = vw; canvas.width = VW; }    // canvas.height stays VH; the frame loop redraws next tick
+}
+fitView();
+window.addEventListener('resize', fitView);
+window.addEventListener('orientationchange', ()=>setTimeout(fitView, 100));
 
 // ---- world / tuning ----
 const WORLD_LEN   = 15800;  // finish line x (~1 min+ even for the fastest racer)
