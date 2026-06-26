@@ -307,6 +307,8 @@
             <button class="btn ghost sm" data-stake="0.5">0.5 SUI</button>
             <button class="btn ghost sm" data-stake="1">1 SUI</button>
           </div>
+          <div class="suiBal" id="suiHouse" style="margin-top:12px;font-size:12px;opacity:.85"></div>
+          <button class="btn ghost sm" id="suiRecover" style="margin-top:6px;display:none">↩︎ Recover house funds</button>
         </div>
         <div id="suiProgress" class="suiProg hidden"></div>
         <div id="suiResult" class="suiResult hidden"></div>
@@ -2268,6 +2270,11 @@ async function refreshSuiWallet(){
   $sui('suiBal').textContent = 'Balance: …';
   try{ const b = await window.FunSui.getBalance(); $sui('suiBal').textContent = 'Balance: '+window.FunSui.mist2sui(b).toFixed(3)+' SUI (testnet)'; }
   catch(e){ $sui('suiBal').textContent = 'Balance: ?'; }
+  // persistent house wallet — show its address + balance, offer to recover any winnings
+  try{ const ha=window.FunSui.houseAddress(), hb=await window.FunSui.houseBalance();
+    $sui('suiHouse').textContent = '🏦 House wallet '+ha.slice(0,8)+'…'+ha.slice(-6)+' · '+window.FunSui.mist2sui(hb).toFixed(3)+' SUI';
+    $sui('suiRecover').style.display = hb>0n ? '' : 'none'; }
+  catch(e){ $sui('suiHouse').textContent=''; $sui('suiRecover').style.display='none'; }
 }
 async function showSui(){
   audioInit(); savePlayerName(nameInput.value);
@@ -2301,6 +2308,11 @@ $sui('suiConnect').onclick = async ()=>{
   const status=$sui('suiStatus'), btn=$sui('suiConnect'); btn.disabled=true; status.textContent='Connecting…';
   try{ await window.FunSui.connect(); status.textContent='Connected ✓ ('+(window.FunSui.walletName()||'wallet')+')'; btn.classList.add('hidden'); await refreshSuiWallet(); }
   catch(e){ status.textContent='⚠️ '+(e.message||e); btn.disabled=false; }
+};
+$sui('suiRecover').onclick = async ()=>{
+  const el=$sui('suiHouse'), prev=el.textContent; el.textContent='↩︎ Recovering house funds…';
+  try{ const r = await window.FunSui.sweepHouse(); el.textContent='✓ Recovered '+r.swept.toFixed(3)+' SUI → your wallet'; setTimeout(refreshSuiWallet, 1600); }
+  catch(err){ el.textContent='⚠️ '+(err.message||err); setTimeout(()=>{ el.textContent=prev; }, 2600); }
 };
 $sui('suiTiers').addEventListener('click', async (e)=>{
   const b=e.target.closest('button[data-stake]'); if(!b) return;
@@ -2676,9 +2688,35 @@ const txStart = (room) => { const t=new Transaction(); t.moveCall({ target:`${PK
 const txFinish = (room, winner) => { const t=new Transaction(); t.moveCall({ target:`${PKG}::race::finish_race`, arguments:[t.object(CONFIG), t.object(room), t.pure.address(winner)] }); return t; };
 const roomIdFrom = (res) => (res.objectChanges||[]).find(c=>c.type==='created' && c.objectType?.endsWith('::race::RaceRoom'))?.objectId;
 
-// ---- Phase-0 staked race: you (wallet) vs an in-page "house" opponent, settled on-chain ----
-// Returns { roomId, houseAddr, kp }. The 2-player contract minimum is met by the house keypair,
-// which the wallet funds in the same flow (testnet only).
+// ---- persistent in-page "house" opponent (TESTNET demo) ----
+// ONE keypair saved in localStorage, so the house address is stable and any winnings
+// paid to it are RECOVERABLE — sweep them back to your wallet with sweepHouse(). NOT mainnet.
+const HOUSE_KEY = 'fd_house_sk_v1';
+function houseKeypair(){
+  try{ const sk = localStorage.getItem(HOUSE_KEY); if (sk) return Ed25519Keypair.fromSecretKey(sk); }catch(e){}
+  const kp = new Ed25519Keypair();
+  try{ localStorage.setItem(HOUSE_KEY, kp.getSecretKey()); }catch(e){}
+  return kp;
+}
+function houseAddress(){ return houseKeypair().toSuiAddress(); }
+async function houseBalance(){ return getBalance(houseAddress()); }
+function houseSecret(){ return houseKeypair().getSecretKey(); }   // suiprivkey… — back up to import elsewhere
+// sweep ALL the house's SUI back to your wallet (or a given address)
+async function sweepHouse(toAddr){
+  if (!toAddr && !S.address) await connect();
+  const to = toAddr || S.address;
+  const kp = houseKeypair();
+  const bal = await getBalance(kp.toSuiAddress());
+  if (bal <= 0n) throw new Error('house wallet is already empty');
+  const t = new Transaction();
+  t.transferObjects([t.gas], t.pure.address(to));   // gas coin = all SUI; remainder after gas → `to`
+  const r = await keyExec(kp, t);
+  return { digest: r.digest, to, swept: mist2sui(bal) };
+}
+
+// ---- Phase-0 staked race: you (wallet) vs the persistent in-page "house", settled on-chain ----
+// Returns { roomId, houseAddr, kp }. The house is topped up from your wallet ONLY when it's short,
+// so once it holds funds the funding prompt is skipped entirely. (testnet only)
 async function playStaked(entrySui, step=()=>{}){
   if (!S.address) await connect();
   const entry = sui2mist(entrySui);
@@ -2688,11 +2726,14 @@ async function playStaked(entrySui, step=()=>{}){
   if (!room) throw new Error('could not find created RaceRoom');
   step('Staking your entry into escrow…');
   await walletExec(txJoin(room, entry));
-  // fund + join the house opponent (ephemeral keypair) so the race can start (min 2 players)
-  const kp = new Ed25519Keypair(); const houseAddr = kp.toSuiAddress();
-  step('Funding the house opponent…');
-  const ft = new Transaction(); const [coin] = ft.splitCoins(ft.gas, [ft.pure.u64(entry + 60_000_000n)]);
-  ft.transferObjects([coin], ft.pure.address(houseAddr)); await walletExec(ft);
+  const kp = houseKeypair(); const houseAddr = kp.toSuiAddress();
+  const need = entry + 30_000_000n;                  // house needs its stake + a little gas
+  const have = await getBalance(houseAddr);
+  if (have < need){                                  // top up only when short (skipped most games)
+    step('Topping up the house wallet…');
+    const ft = new Transaction(); const [coin] = ft.splitCoins(ft.gas, [ft.pure.u64(need - have + 20_000_000n)]);
+    ft.transferObjects([coin], ft.pure.address(houseAddr)); await walletExec(ft);
+  }
   step('House staking its entry…');
   await keyExec(kp, txJoin(room, entry));
   step('Starting the race on-chain…');
@@ -2725,7 +2766,7 @@ async function joinStakedRoom(room, stakeSui){
 }
 
 window.FunSui = { ...S, connect, getConfig, getBalance, playStaked, settle,
-  createStakedRoom, joinStakedRoom,
+  createStakedRoom, joinStakedRoom, houseAddress, houseBalance, houseSecret, sweepHouse,
   sui2mist, mist2sui, PKG, CONFIG, NET, get address(){ return S.address; },
   hasWallet:()=>!!findWallet(), wallets:()=>listWallets().map(w=>w.name||'?'), walletName:()=>S.wallet&&S.wallet.name };
 window.dispatchEvent(new Event('funsui-ready'));
