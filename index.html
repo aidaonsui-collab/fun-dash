@@ -2299,7 +2299,7 @@ $sui('suiBtn').onclick = ()=>showSui();
 $sui('suiBack').onclick = ()=>{ $sui('suipanel').classList.add('hidden'); gameMode='race'; suiRace=null; showMenu(); };
 $sui('suiConnect').onclick = async ()=>{
   const status=$sui('suiStatus'), btn=$sui('suiConnect'); btn.disabled=true; status.textContent='Connecting…';
-  try{ await window.FunSui.connect(); status.textContent='Connected ✓'; btn.classList.add('hidden'); await refreshSuiWallet(); }
+  try{ await window.FunSui.connect(); status.textContent='Connected ✓ ('+(window.FunSui.walletName()||'wallet')+')'; btn.classList.add('hidden'); await refreshSuiWallet(); }
   catch(e){ status.textContent='⚠️ '+(e.message||e); btn.disabled=false; }
 };
 $sui('suiTiers').addEventListener('click', async (e)=>{
@@ -2604,14 +2604,22 @@ const S = { ready:true, net:NET, address:null, wallet:null, account:null };
 const sui2mist = (s) => BigInt(Math.round(Number(s) * 1e9));
 const mist2sui = (m) => (Number(m) / 1e9);
 
-// ---- wallet (wallet-standard; works with Slush/Sui Wallet/Suiet/etc.) ----
-function findWallet(){
-  const all = getWallets().get();
-  return all.find(w => w.chains?.some(c=>c.startsWith('sui:')) &&
+// ---- wallet (wallet-standard; works with Slush/Sui Wallet/Suiet/Phantom/etc.) ----
+function listWallets(){
+  return getWallets().get().filter(w => w.chains?.some(c=>c.startsWith('sui:')) &&
     (w.features['sui:signAndExecuteTransaction'] || w.features['sui:signTransaction'] || w.features['sui:signAndExecuteTransactionBlock']));
 }
-async function connect(){
-  const w = findWallet();
+// prefer Slush / Sui Wallet when several Sui-capable wallets are installed — Phantom
+// etc. also register for Sui, so don't just grab whichever injected first.
+function rankWallet(w){ const n=(w.name||'').toLowerCase();
+  if (n.includes('slush')) return 0; if (n.includes('sui wallet')) return 1; if (n==='sui') return 2; return 9; }
+function findWallet(preferred){
+  const all = listWallets();
+  if (preferred){ const p = all.find(w => (w.name||'').toLowerCase().includes(preferred.toLowerCase())); if (p) return p; }
+  return all.slice().sort((a,b)=>rankWallet(a)-rankWallet(b))[0] || null;
+}
+async function connect(preferred){
+  const w = findWallet(preferred);
   if (!w) throw new Error('No Sui wallet found. Install Slush / Sui Wallet and set it to Testnet.');
   await w.features['standard:connect'].connect();
   const acc = w.accounts[0];
@@ -2718,7 +2726,8 @@ async function joinStakedRoom(room, stakeSui){
 
 window.FunSui = { ...S, connect, getConfig, getBalance, playStaked, settle,
   createStakedRoom, joinStakedRoom,
-  sui2mist, mist2sui, PKG, CONFIG, NET, get address(){ return S.address; }, hasWallet:()=>!!findWallet() };
+  sui2mist, mist2sui, PKG, CONFIG, NET, get address(){ return S.address; },
+  hasWallet:()=>!!findWallet(), wallets:()=>listWallets().map(w=>w.name||'?'), walletName:()=>S.wallet&&S.wallet.name };
 window.dispatchEvent(new Event('funsui-ready'));
 </script>
 </body>
