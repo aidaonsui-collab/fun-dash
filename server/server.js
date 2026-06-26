@@ -105,7 +105,16 @@ function beginStakedHandshake(players, stake){
 }
 function failHandshake(hs, msg){
   clearTimeout(hs.timer);
-  for (const c of hs.players){ if (c){ c.handshake = null; c.state = 'idle'; send(c, { t:'error', msg }); } }
+  // if an on-chain room was created and anyone staked, refund everyone (operator cancel_race)
+  let refunding = false;
+  if (hs.onchainRoom && settle.settlementEnabled()){
+    refunding = true;
+    settle.cancelRace(hs.onchainRoom)
+      .then(r => console.log(`refunded cancelled room ${hs.onchainRoom}: ${r.refunded} player(s), ${r.total} MIST (${r.digest})`))
+      .catch(e => console.error(`cancel_race failed for ${hs.onchainRoom}: ${e.message}`));
+  }
+  for (const c of hs.players){ if (c){ c.handshake = null; c.state = 'idle';
+    send(c, { t:'error', msg: msg + (refunding ? ' — refunding any stake on-chain.' : '') }); } }
 }
 async function tryStartStaked(hs){
   if (!hs.onchainRoom || hs.joined.size < hs.players.length) return;   // wait for every player to stake

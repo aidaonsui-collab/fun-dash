@@ -10,7 +10,7 @@
 //  Everything here is gated on OPERATOR_KEY being present in the env. Without it
 //  the realtime race still runs; it just won't touch chain (good for local dev).
 // ---------------------------------------------------------------------------
-const PKG     = process.env.FUNRUN_PKG    || '0xb466991c2027c7238002fcc6fd52a7f5e4f60bf34c7ad06e8047a695439a0d52';
+const PKG     = process.env.FUNRUN_PKG    || '0xd62a27309436bee2f8f4f56a77511bef6991124c7ae74d545933493875adee0a';  // v2 (adds cancel_race)
 const CONFIG  = process.env.FUNRUN_CONFIG || '0x3b76b160d5ed84e25db5350c8bf83bbbddc613fd87b82f11c939dc869a94944b';
 const NETWORK = process.env.FUNRUN_NET    || 'testnet';
 
@@ -81,4 +81,19 @@ async function finishRace(roomId, winnerAddr){
   return { digest: res.digest, payout: ev?.parsedJson?.winner_payout, fee: ev?.parsedJson?.platform_fee };
 }
 
-module.exports = { settlementEnabled, operatorAddress, readRoom, startRace, finishRace, PKG, CONFIG, NETWORK };
+// cancel_race (operator) — refund every staked player while the room is still WAITING.
+// Used when a match falls through before start (opponent never stakes / disconnects / cancels).
+async function cancelRace(roomId){
+  const { client, keypair, Transaction } = await lazy();
+  if (!keypair) throw new Error('no OPERATOR_KEY');
+  const tx = new Transaction();
+  tx.moveCall({ target: `${PKG}::race::cancel_race`, arguments: [tx.object(CONFIG), tx.object(roomId)] });
+  tx.setGasBudget(50_000_000);
+  const res = await client.signAndExecuteTransaction({ signer: keypair, transaction: tx, options: { showEffects: true, showEvents: true } });
+  await client.waitForTransaction({ digest: res.digest });
+  if (res.effects?.status?.status !== 'success') throw new Error('cancel_race failed: ' + JSON.stringify(res.effects?.status));
+  const ev = (res.events || []).find(e => e.type.endsWith('::race::RaceCancelled'));
+  return { digest: res.digest, refunded: ev?.parsedJson?.refunded_players, total: ev?.parsedJson?.refunded_total };
+}
+
+module.exports = { settlementEnabled, operatorAddress, readRoom, startRace, finishRace, cancelRace, PKG, CONFIG, NETWORK };
