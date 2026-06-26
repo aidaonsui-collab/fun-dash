@@ -259,6 +259,12 @@ wss.on('connection', (ws) => {
       case 'leaderboard':
         send(c, { t:'leaderboard', rows: profiles.leaderboard(50) });
         break;
+      case 'submit_time':                  // a signed-in player's single-player best time on a track
+        if (c.wallet) profiles.submitTime(c.wallet, m.theme, m.time);   // wallet already verified at 'auth'
+        break;
+      case 'time_leaderboard':             // players ranked by combined best time across the tracks
+        send(c, { t:'time_lb', rows: profiles.timeLeaderboard(50) });
+        break;
       case 'admin': {                      // hide / ban / rename — gated to the dev wallet
         if (!(await auth.ownsWallet(m.message, m.signature, m.addr)) || !auth.freshFor(m.message, m.addr) || String(m.addr).toLowerCase() !== ADMIN_WALLET){ send(c, { t:'admin_err', msg:'not authorized' }); break; }
         const r = profiles.adminSet(m.wallet, { name:m.name, hidden:m.hidden, banned:m.banned });

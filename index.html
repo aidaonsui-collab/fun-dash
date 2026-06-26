@@ -320,7 +320,7 @@
         <h1>🏆 <span class="a">LEADERBOARD</span></h1>
         <div class="lbTabs">
           <button class="lbTabBtn active" data-tab="champions">🏆 Champions</button>
-          <button class="lbTabBtn" data-tab="racers">🏃 Racers</button>
+          <button class="lbTabBtn" data-tab="time">🏁 Time Attack</button>
           <button class="lbTabBtn" data-tab="best">⏱ Best Times</button>
         </div>
         <div class="lbWrap">
@@ -2133,6 +2133,8 @@ function endRace(){
   if (me.finished){
     const prev = bestTimes[track.theme];
     if (prev===undefined || me.finishTime < prev){ bestTimes[track.theme]=+me.finishTime.toFixed(2); lastBestImproved=true; saveBest(); }
+    // if signed in, feed this track's best to the server Time Attack board (server keeps the min; floor-checked)
+    if (gameMode==='race' && myProfile && net && net.readyState===1) sendNet({t:'submit_time', theme:track.theme, time:bestTimes[track.theme]});
   }
   // rating ticks up only in single-player Free Race (online has its own server-side stats)
   if (gameMode==='race'){
@@ -2184,7 +2186,7 @@ function endRace(){
 // ----- leaderboard (local, seeded with global-style players) -----
 function renderLeaderboard(){
   if (lbTab==='champions'){ loadLiveLeaderboard(); return; }
-  if (lbTab==='racers'){ renderRacers(); return; }
+  if (lbTab==='time'){ renderTimeAttack(); return; }
   const winPct = stats.games ? Math.round(100*stats.wins/stats.games) : 0;
   document.getElementById('lbStats').innerHTML =
     `<div class="big">${stats.rating.toLocaleString()}</div><div class="biglbl">your rating</div>`+
@@ -2212,26 +2214,38 @@ function renderLeaderboard(){
   }
 }
 // ----- per-character stats tab: each racer's races / wins / best / SUI won -----
-function renderRacers(){
-  const tot = CHARS.reduce((a,c)=>{ const s=charStats[c.id]; if(s){ a.games+=s.games; a.wins+=s.wins; a.sui+=s.sui||0; } return a; }, {games:0,wins:0,sui:0});
-  const played = CHARS.filter(c=>charStats[c.id]&&charStats[c.id].games).length;
-  document.getElementById('lbStats').innerHTML =
-    `<div class="big">Ⓢ ${tot.sui.toFixed(2)}</div><div class="biglbl">total SUI won</div>`+
-    `<div class="row"><span>Total races</span><b>${tot.games}</b></div>`+
-    `<div class="row"><span>Total wins</span><b>${tot.wins}</b></div>`+
-    `<div class="row"><span>Win rate</span><b>${tot.games?Math.round(100*tot.wins/tot.games):0}%</b></div>`+
-    `<div class="row"><span>Racers played</span><b>${played}/${CHARS.length}</b></div>`;
-  const list=document.getElementById('lbList'); list.innerHTML='';
-  const rows = CHARS.map(c=>({c, s: charStats[c.id]||{games:0,wins:0,podiums:0,best:null,sui:0}}));
-  rows.sort((a,b)=> b.s.games-a.s.games || b.s.wins-a.s.wins || (a.c.name<b.c.name?-1:1));
-  rows.forEach(({c,s})=>{
-    const wr = s.games?Math.round(100*s.wins/s.games):0;
-    const row=document.createElement('div'); row.className='lbRow'+(s.games?'':' dim');
-    row.innerHTML =
-      `<img class="rcAv" src="assets/${c.id}.png" onerror="this.style.visibility='hidden'">`+
-      `<span class="rcInfo"><b>$${esc(c.name)}</b><small>${s.games} race${s.games===1?'':'s'}${s.podiums?' · '+s.podiums+' 🏅':''}${s.best!=null?' · '+s.best.toFixed(2)+'s':''}</small></span>`+
-      `<span class="sc">${s.wins}W · ${wr}%</span>`+
-      `<span class="rcSui">${s.sui?('Ⓢ '+(+s.sui).toFixed(2)):''}</span>`;
+// ----- TIME ATTACK tab: real players ranked by COMBINED best time across all tracks (server-backed) -----
+let liveTimeRows = [];
+function fmtTime(s){ s=Math.max(0,+s||0); const m=Math.floor(s/60), r=s-m*60; return m>0 ? `${m}:${r<10?'0':''}${r.toFixed(1)}` : `${r.toFixed(2)}s`; }
+function submitAllBestTimes(){ for(const k in bestTimes){ if(bestTimes[k]!=null) sendNet({t:'submit_time', theme:k, time:bestTimes[k]}); } }   // backfill on sign-in
+async function renderTimeAttack(){
+  document.getElementById('lbList').innerHTML='<div class="lbRow">Loading time-attack board…</div>'; document.getElementById('lbStats').innerHTML='';
+  if(!(net&&net.readyState===1)){ try{ await connectNet(); }catch(e){ renderTimeAttackRows(null,'Game server offline.'); return; } }
+  sendNet({t:'time_leaderboard'});
+}
+function renderTimeAttackRows(rows, err){
+  const list=document.getElementById('lbList'), stats=document.getElementById('lbStats'); if(!list) return;
+  if(err){ list.innerHTML='<div class="lbRow" style="color:#ffd24a">'+esc(err)+'</div>'; if(stats) stats.innerHTML=''; return; }
+  if(rows) liveTimeRows=rows;
+  const N = Object.keys(THEME).length;
+  // your own progress (from LOCAL best times) — shown even before you've signed in
+  const myThemes = Object.keys(bestTimes).filter(k=>bestTimes[k]!=null);
+  const myTotal = myThemes.reduce((a,k)=>a+bestTimes[k],0), myDone=myThemes.length;
+  const fastest = liveTimeRows.find(r=>r.tracks>=N);
+  stats.innerHTML =
+    `<div class="big">${myDone?fmtTime(myTotal):'—'}</div><div class="biglbl">your combined time (${myDone}/${N})</div>`+
+    `<div class="row"><span>Tracks done</span><b>${myDone}/${N}</b></div>`+
+    `<div class="row"><span>Racers on board</span><b>${liveTimeRows.length}</b></div>`+
+    `<div class="row"><span>Fastest (all ${N})</span><b>${fastest?fmtTime(fastest.total):'—'}</b></div>`+
+    (myProfile?'':`<div class="row"><span style="color:#ffd24a;font-size:12px">Sign in (Online PvP) to appear ↗</span><b></b></div>`);
+  list.innerHTML='';
+  if(!liveTimeRows.length){ list.innerHTML='<div class="lbRow" style="color:var(--muted)">No times yet — sign in, then race all '+N+' tracks to top the board.</div>'; return; }
+  liveTimeRows.forEach((r,i)=>{
+    const me = myProfile && r.wallet===myProfile.wallet;
+    const incomplete = r.tracks < N;
+    const row=document.createElement('div'); row.className='lbRow'+(i<3&&!incomplete?' top3':'')+(me?' me':'');
+    row.innerHTML=`<span class="rk">${i+1}</span><span class="nm">${esc(r.name)}${incomplete?` <span style="font-size:11px;color:var(--muted)">${r.tracks}/${N} 🏁</span>`:''}</span>`+
+      `<span class="sc">${fmtTime(r.total)}</span>`;
     list.appendChild(row);
   });
 }
@@ -2518,10 +2532,12 @@ async function onNetMsg(m){
       myProfile = m.profile; isAdmin = !!m.isAdmin;
       if (m.profile && m.profile.name){ savePlayerName(m.profile.name); if(nameInput) nameInput.value=playerName; }
       renderNetProfile(m.needsName);
+      if (m.profile) submitAllBestTimes();   // backfill this wallet's existing per-track bests onto the Time Attack board
       break;
     case 'auth_err': renderNetProfile(false, '⚠️ '+m.msg); break;
     case 'name_err': renderNetProfile(true, '⚠️ '+m.msg); break;
     case 'leaderboard': case 'admin_ok': renderLiveLeaderboard(m.rows); break;
+    case 'time_lb': renderTimeAttackRows(m.rows); break;
     case 'admin_err': renderLiveLeaderboard(null, '⚠️ '+m.msg); break;
   }
 }

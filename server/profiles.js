@@ -47,7 +47,7 @@ const pub = p => ({ wallet:p.wallet, name:p.name, games:p.games, wins:p.wins, su
 function load(){
   try {
     const raw = JSON.parse(fs.readFileSync(FILE,'utf8'));
-    for (const p of raw.profiles||[]){ byWallet.set(p.wallet, p); byNameLower.set(p.nameLower, p.wallet); }
+    for (const p of raw.profiles||[]){ if(!p.tracks) p.tracks={}; byWallet.set(p.wallet, p); byNameLower.set(p.nameLower, p.wallet); }
     console.log(`profiles: loaded ${byWallet.size} from ${FILE}`);
   } catch(e){ console.log(`profiles: starting fresh at ${FILE}`); }
 }
@@ -72,7 +72,7 @@ function claimName(wallet, name){
   if (byWallet.has(wallet))                 return { error:'This wallet already has a name (names are permanent).' };
   const lower = name.toLowerCase();
   if (byNameLower.has(lower))               return { error:'That name is already taken.' };
-  const p = { wallet, name, nameLower:lower, games:0, wins:0, sui:0, hidden:false, banned:false, created:Date.now() };
+  const p = { wallet, name, nameLower:lower, games:0, wins:0, sui:0, tracks:{}, hidden:false, banned:false, created:Date.now() };
   byWallet.set(wallet, p); byNameLower.set(lower, wallet); persist();
   return { profile: pub(p) };
 }
@@ -88,6 +88,27 @@ function leaderboard(limit=50){
     .filter(p => !p.hidden && !p.banned)
     .sort((a,b) => b.sui - a.sui || b.wins - a.wins || a.created - b.created)
     .slice(0, limit).map(pub);
+}
+
+// ---- combined-time "Time Attack" board: each player's best time per track, summed across tracks ----
+// Single-player times are CLIENT-reported, so reject anything below a sane floor (no legit run is that
+// fast — a track is ~15800px at ≤~325px/s ⇒ ≥~48s) or absurdly high.
+const MIN_TRACK_TIME = 25, MAX_TRACK_TIME = 900;
+function submitTime(wallet, theme, time){
+  const p = byWallet.get(norm(wallet)); if (!p) return { error:'no profile' };   // only named (signed-in) wallets rank
+  theme = String(theme||'').slice(0,24); time = Number(time);
+  if (!theme || !isFinite(time) || time < MIN_TRACK_TIME || time > MAX_TRACK_TIME) return { error:'bad time' };
+  if (!p.tracks) p.tracks = {};
+  if (p.tracks[theme] === undefined || time < p.tracks[theme]){ p.tracks[theme] = +time.toFixed(2); persist(); }
+  return { ok:true };
+}
+// players ranked by COMBINED time across the tracks they've completed (most tracks first, then fastest total)
+function timeLeaderboard(limit=50){
+  return [...byWallet.values()]
+    .filter(p => !p.hidden && !p.banned && p.tracks && Object.keys(p.tracks).length>0)
+    .map(p => { const ts=Object.values(p.tracks); return { wallet:p.wallet, name:p.name, total:+ts.reduce((a,b)=>a+b,0).toFixed(2), tracks:ts.length }; })
+    .sort((a,b) => b.tracks - a.tracks || a.total - b.total)
+    .slice(0, limit);
 }
 
 // admin moderation (server.js gates this behind a deployer-wallet signature)
@@ -106,4 +127,4 @@ function adminSet(wallet, patch){
 }
 
 load();
-module.exports = { get, getPublic, claimName, recordResult, leaderboard, adminSet, isClean };
+module.exports = { get, getPublic, claimName, recordResult, leaderboard, submitTime, timeLeaderboard, adminSet, isClean };
