@@ -397,10 +397,10 @@ CHARS.forEach(c => { const im = new Image(); im.src = 'assets/' + c.id + '.png';
 // feet-anchored cells. The run cycle auto-links to running speed (faster = faster):
 //   SHEET.hippo = { src:'assets/hippo_run.png', frames:8 };
 // Air & stun keep using the static PFP, so you can enable characters one at a time.
-const SHEET_V = '7';   // bump to bust any stale browser cache of the run-cycle strips
+const SHEET_V = '8';   // bump to bust any stale browser cache of the run-cycle strips
 const SHEET = {
   hippo: { src:'assets/hippo_run.png?v='+SHEET_V, frames:4 },
-  blub:  { src:'assets/blub_run.png?v='+SHEET_V,  frames:4 },
+  blub:  { src:'assets/blub_run.png?v='+SHEET_V,  frames:2 },   // dropped 2 backward-facing frames
   miu:   { src:'assets/miu_run.png?v='+SHEET_V,   frames:2 },   // dropped 2 frames (white-smear artifacts)
   lofi:  { src:'assets/lofi_run.png?v='+SHEET_V,  frames:4 },
   axol:  { src:'assets/axol_run.png?v='+SHEET_V,  frames:3 },   // dropped 1 frame (neck smear)
@@ -1758,17 +1758,10 @@ function drawSprite(r, x, y, spr, air, stun, bob){
     } else if (air){
       ctx.drawImage(spr, -W/2, -H, W, H);                       // mid-jump: legs tucked, no swing
     } else {
-      // 2-band puppet (fallback when a run-strip isn't loaded): the head+torso stay WHOLE on
-      // top, only the bottom band (legs) swings on the hip. Split LOW (62%) so a big chibi head
-      // is never cut, and OVERLAP the two bands so there's never a seam-gap / split-face.
-      const hipF=0.62, p=r.runPhase, ov=4, srcOv=Math.round(ov*cellH/H);
-      const srcHip=Math.round(cellH*hipF), hipH=H*hipF, hipY=-H+hipH;
-      ctx.drawImage(spr, 0, 0, cellW, srcHip+srcOv, -W/2, -H, W, hipH+ov);                          // head + torso (overlaps down)
-      ctx.save();
-        ctx.translate(0, hipY);                                                                     // pivot at the hip
-        ctx.transform(1, 0, Math.sin(p)*0.30, 1, 0, 0);                                             // legs swing — no vertical stretch
-        ctx.drawImage(spr, 0, srcHip-srcOv, cellW, cellH-srcHip+srcOv, -W/2, -ov, W, (H-hipH)+ov);  // legs (overlaps up)
-      ctx.restore();
+      // fallback while a run-strip is still loading (slow CDN / phone): draw the WHOLE sprite —
+      // never split into bands — so a big chibi head can never be cut. The bounce/lean/squash
+      // from the outer transform still sells motion; real leg animation resumes once the strip loads.
+      ctx.drawImage(spr, -W/2, -H, W, H);
     }
     ctx.restore();
   }
