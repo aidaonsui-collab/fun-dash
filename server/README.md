@@ -5,7 +5,17 @@ into rooms, and send **only jump inputs**. The server runs the deterministic rac
 sim, broadcasts snapshots, decides the winner, and (for staked rooms) settles
 on-chain as the contract **operator** — so a player can never fake a position or a win.
 
-## Run
+## Deployed
+
+Live on Railway (project `fun-dash-server`, aidaonsui-collab):
+
+- **https://fun-dash-server-production.up.railway.app** (`/health` for status)
+- WebSocket: **wss://fun-dash-server-production.up.railway.app**
+
+The game (`../index.html`) defaults to this URL, so it's online out of the box.
+Redeploy after server changes with `railway up` from this directory.
+
+## Run locally
 
 ```bash
 cd funrun-game/server
@@ -13,8 +23,8 @@ npm install
 npm start                 # realtime only, no chain  → ws://localhost:8125
 ```
 
-The static game (`../index.html`, served on :8124) auto-connects to
-`ws://<host>:8125`. Override with `?server=ws://host:port` on the game URL.
+Point the game at a local server by appending `?server=ws://localhost:8125` to
+the game URL (otherwise it uses the deployed server above).
 
 Env knobs: `PORT` (8125), `TICK_HZ` (30), `CASUAL_WAIT` (6000ms before bots fill a
 casual field), `STAKE_WAIT` (45000ms handshake window).

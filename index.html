@@ -2425,8 +2425,10 @@ function roundRect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w
 //  render its snapshots, and send only jump inputs. The server decides
 //  positions + the winner (and settles staked rooms on-chain as operator).
 //------------------------------------------------------------------
+// defaults to the deployed cloud server so the game is online out of the box;
+// for local server dev append ?server=ws://localhost:8125 to the game URL.
 const NET_URL = new URLSearchParams(location.search).get('server')
-  || ('ws://' + (location.hostname || 'localhost') + ':8125');
+  || 'wss://fun-dash-server-production.up.railway.app';
 let net=null, online=false, myNetId=null, netById={}, netStake=0, lastWasOnline=false, netGotSnap=false;
 const $net = (id)=>document.getElementById(id);
 function sendNet(m){ try{ if(net && net.readyState===1) net.send(JSON.stringify(m)); }catch(e){} }
