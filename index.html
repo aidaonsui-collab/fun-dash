@@ -1757,7 +1757,8 @@ function drawSprite(r, x, y, spr, air, stun, bob){
       const fr=sheet.frames; let idx=Math.floor(r.runPhase/(Math.PI*2)*fr); idx=((idx%fr)+fr)%fr;
       ctx.drawImage(strip, idx*cellW, 0, cellW, cellH, -W/2, -H, W, H);
     } else if (air){
-      ctx.drawImage(spr, -W/2, -H, W, H);                       // mid-jump: legs tucked, no swing
+      const aw = H * spr.naturalWidth / spr.naturalHeight;      // PFP's OWN aspect (the strip's W distorts it → looks "split")
+      ctx.drawImage(spr, -aw/2, -H, aw, H);                     // mid-jump: legs tucked, no swing
     } else {
       // fallback while a run-strip is still loading (slow CDN / phone): draw the WHOLE sprite —
       // never split into bands — so a big chibi head can never be cut. The bounce/lean/squash
