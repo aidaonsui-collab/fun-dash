@@ -397,17 +397,17 @@ CHARS.forEach(c => { const im = new Image(); im.src = 'assets/' + c.id + '.png';
 // feet-anchored cells. The run cycle auto-links to running speed (faster = faster):
 //   SHEET.hippo = { src:'assets/hippo_run.png', frames:8 };
 // Air & stun keep using the static PFP, so you can enable characters one at a time.
-const SHEET_V = '6';   // bump to bust any stale browser cache of the run-cycle strips
+const SHEET_V = '7';   // bump to bust any stale browser cache of the run-cycle strips
 const SHEET = {
   hippo: { src:'assets/hippo_run.png?v='+SHEET_V, frames:4 },
   blub:  { src:'assets/blub_run.png?v='+SHEET_V,  frames:4 },
-  miu:   { src:'assets/miu_run.png?v='+SHEET_V,   frames:4 },
+  miu:   { src:'assets/miu_run.png?v='+SHEET_V,   frames:2 },   // dropped 2 frames (white-smear artifacts)
   lofi:  { src:'assets/lofi_run.png?v='+SHEET_V,  frames:4 },
-  axol:  { src:'assets/axol_run.png?v='+SHEET_V,  frames:4 },
-  fud:   { src:'assets/fud_run.png?v='+SHEET_V,   frames:4 },
-  pans:  { src:'assets/pans_run.png?v='+SHEET_V,  frames:4 },
-  adeniyi:{ src:'assets/adeniyi_run.png?v='+SHEET_V, frames:4 },
-  alon:  { src:'assets/alon_run.png?v='+SHEET_V,  frames:4 },
+  axol:  { src:'assets/axol_run.png?v='+SHEET_V,  frames:3 },   // dropped 1 frame (neck smear)
+  fud:   { src:'assets/fud_run.png?v='+SHEET_V,   frames:3 },   // dropped 1 frame (body smudge)
+  pans:  { src:'assets/pans_run.png?v='+SHEET_V,  frames:3 },   // dropped 1 frame (head smear)
+  adeniyi:{ src:'assets/adeniyi_run.png?v='+SHEET_V, frames:3 },// dropped 1 frame (head smudge)
+  alon:  { src:'assets/alon_run.png?v='+SHEET_V,  frames:3 },   // dropped 1 frame (smeared cap/face)
   vitalik:{ src:'assets/vitalik_run.png?v='+SHEET_V, frames:2 },   // dropped 2 botched AI frames (torn head)
   elon:  { src:'assets/elon_run.png?v='+SHEET_V,  frames:3 },   // dropped 1 botched AI frame (torn head)
   wojak: { src:'assets/wojak_run.png?v='+SHEET_V, frames:3 },   // dropped 1 botched AI frame
