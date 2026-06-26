@@ -20,7 +20,8 @@
     display:flex; align-items:center; justify-content:center; min-height:100%;
     overflow:hidden; user-select:none;
   }
-  #wrap{ position:relative; width:min(96vw,960px); }
+  /* size the 16:9 stage to fit BOTH the width and the height, so it never clips on a phone in landscape */
+  #wrap{ position:relative; width:min(96vw, 960px, calc(96vh * 16 / 9)); }
   #stage{
     position:relative; width:100%; aspect-ratio:16/9;
     border-radius:16px; overflow:hidden;
@@ -54,20 +55,41 @@
     min-width:64px; text-align:center; font-variant-numeric:tabular-nums;
     background:rgba(0,0,0,.3); padding:6px 10px; border-radius:10px; font-weight:bold;
   }
-  #itemSlot{
-    pointer-events:auto; cursor:pointer; position:absolute; left:14px; bottom:14px;
-    width:74px; height:74px; border-radius:16px;
-    background:rgba(0,0,0,.34); box-shadow:inset 0 0 0 2px rgba(255,255,255,.14);
-    display:flex; align-items:center; justify-content:center; font-size:40px;
-    transition:transform .08s ease; touch-action:manipulation;
+  /* ---- Fun Run–style touch controls: power-up (bottom-left) + jump (bottom-right), both circles ---- */
+  .touchBtn{
+    pointer-events:auto; cursor:pointer; position:absolute; bottom:18px;
+    width:clamp(62px,12.5vw,92px); height:clamp(62px,12.5vw,92px); border-radius:50%;
+    display:flex; align-items:center; justify-content:center; font-size:clamp(30px,6vw,42px); line-height:1;
+    background:rgba(0,0,0,.32); box-shadow:inset 0 0 0 2px rgba(255,255,255,.16), 0 6px 16px rgba(0,0,0,.4);
+    transition:transform .07s ease, background .15s, box-shadow .15s, opacity .15s; touch-action:manipulation;
+    user-select:none; -webkit-user-select:none; color:#fff;
   }
-  #itemSlot.has{ background:rgba(255,207,63,.22); box-shadow:inset 0 0 0 2px var(--accent), 0 0 22px rgba(255,207,63,.5) }
-  #itemSlot:active{ transform:scale(.92) }
-  #itemSlot .lbl{ position:absolute; bottom:-20px; left:0; right:0; text-align:center; font-size:11px; color:var(--muted) }
+  .touchBtn:active{ transform:scale(.9); background:rgba(255,255,255,.18) }
+  .touchBtn .lbl{ position:absolute; bottom:-17px; left:0; right:0; text-align:center; font-size:10px; letter-spacing:.5px; color:rgba(255,255,255,.72) }
+  #itemSlot{ left:18px; opacity:.45 }                 /* power-up — dim until you're holding one */
+  #itemSlot.has{ opacity:1; background:rgba(255,207,63,.26); box-shadow:inset 0 0 0 2px var(--accent), 0 0 26px rgba(255,207,63,.6) }
+  #jumpBtn{ right:18px; background:rgba(74,144,255,.30); box-shadow:inset 0 0 0 2px rgba(150,195,255,.55), 0 6px 16px rgba(0,0,0,.4); font-weight:bold }
+  #jumpBtn .arrow{ font-size:1.15em; margin-top:-2px }
   #hintJump{
-    position:absolute; left:50%; transform:translateX(-50%); bottom:16px; font-size:12px; color:rgba(255,255,255,.8);
+    position:absolute; left:50%; transform:translateX(-50%); bottom:18px; font-size:12px; color:rgba(255,255,255,.8);
     background:rgba(0,0,0,.3); padding:6px 10px; border-radius:10px; white-space:nowrap;
   }
+  @media (pointer:coarse){ #hintJump{ display:none } }    /* on touch the circle buttons replace the keyboard hint */
+  @media (pointer:fine){ .touchBtn .lbl{ display:none } }  /* labels are noise for mouse/keyboard players */
+
+  /* ---- portrait-on-phone: nudge to rotate (programmatic auto-rotate isn't allowed on iOS) ---- */
+  #rotateNudge{ display:none }
+  @media (orientation:portrait) and (pointer:coarse){
+    #wrap{ filter:blur(2px); opacity:.5 }
+    #rotateNudge{
+      position:fixed; inset:0; z-index:9999; display:flex; align-items:center; justify-content:center;
+      background:radial-gradient(900px 600px at 50% 0%, #1d2a6b, var(--bg) 70%); padding:24px; text-align:center;
+    }
+    #rotateNudge .rn-phone{ font-size:74px; display:inline-block; animation:rnSpin 1.9s ease-in-out infinite }
+    #rotateNudge h2{ margin:16px 0 6px; font-size:27px; color:var(--accent) }
+    #rotateNudge p{ margin:0 auto; color:#cfd6f0; font-size:16px; max-width:300px }
+  }
+  @keyframes rnSpin{ 0%,38%{ transform:rotate(0) } 58%,100%{ transform:rotate(-90deg) } }
 
   /* ---------- overlays ---------- */
   .overlay{
@@ -149,8 +171,9 @@
   @keyframes heroBob{ 0%,100%{transform:translateY(0)} 50%{transform:translateY(-7px)} }
   .hero .ht{ font-weight:bold; font-size:18px; color:#fff } .hero .htk{ font-size:12px; color:var(--muted) }
   .nameRow{ display:flex; gap:8px; justify-content:center; align-items:center; margin:8px 0 12px; color:var(--muted); font-size:14px }
-  .nameRow input{ font-family:inherit; font-size:15px; font-weight:bold; color:#fff; text-align:center;
-    background:rgba(0,0,0,.3); border:2px solid rgba(255,255,255,.18); border-radius:10px; padding:8px 12px; width:190px; outline:none }
+  .nameRow input{ font-family:inherit; font-size:16px; font-weight:bold; color:#fff; text-align:center;
+    background:rgba(0,0,0,.3); border:2px solid rgba(255,255,255,.18); border-radius:10px; padding:9px 12px; width:190px; outline:none;
+    -webkit-user-select:text; user-select:text; touch-action:manipulation; }   /* override body user-select:none so tap focuses + opens the keyboard on iOS; 16px avoids focus-zoom */
   .nameRow input:focus{ border-color:var(--accent) }
   .btnRow{ display:flex; gap:10px; justify-content:center; flex-wrap:wrap; margin-top:4px }
   .suiStatus{ color:var(--muted); font-size:13px; margin:8px 0; min-height:16px }
@@ -208,6 +231,7 @@
 </style>
 </head>
 <body>
+<div id="rotateNudge"><div><div class="rn-phone">📱</div><h2>Rotate to play</h2><p>Fun Dash runs best in <b>landscape</b> — turn your phone sideways! 🏃💨</p></div></div>
 <div id="wrap">
   <div id="stage">
     <canvas id="game" width="960" height="540"></canvas>
@@ -220,8 +244,9 @@
         <div id="track"><span class="flag">🏁</span></div>
         <div id="timer">0.0s</div>
       </div>
-      <div id="hintJump"><kbd>Space</kbd>/Tap jump · double-jump · <kbd>↓</kbd>/button use item</div>
-      <div id="itemSlot" title="Use item"><span id="itemIcon"></span><span class="lbl">USE ITEM</span></div>
+      <div id="hintJump"><kbd>Space</kbd> jump · double-jump · <kbd>↓</kbd> use power-up</div>
+      <div id="itemSlot" class="touchBtn" title="Use power-up"><span id="itemIcon"></span><span class="lbl">POWER-UP</span></div>
+      <div id="jumpBtn" class="touchBtn" title="Jump"><span class="arrow">⬆</span><span class="lbl">JUMP</span></div>
     </div>
 
     <!-- countdown -->
@@ -2264,6 +2289,19 @@ window.addEventListener('keydown', e=>{
 });
 canvas.addEventListener('pointerdown', e=>{ e.preventDefault(); audioInit(); playerJump(); });
 itemSlot.addEventListener('pointerdown', e=>{ e.preventDefault(); e.stopPropagation(); playerUse(); });
+const jumpBtn=document.getElementById('jumpBtn');
+jumpBtn.addEventListener('pointerdown', e=>{ e.preventDefault(); e.stopPropagation(); audioInit(); playerJump(); });
+
+// best-effort: on phones that allow it (Android), go fullscreen + lock landscape when you start playing.
+// iOS forbids programmatic orientation lock, so the #rotateNudge covers portrait there instead.
+async function goLandscape(){
+  try{
+    if (!matchMedia('(pointer:coarse)').matches) return;        // touch devices only
+    const el=document.documentElement;
+    if (!document.fullscreenElement && el.requestFullscreen){ await el.requestFullscreen({navigationUI:'hide'}).catch(()=>{}); }
+    if (screen.orientation && screen.orientation.lock){ await screen.orientation.lock('landscape').catch(()=>{}); }
+  }catch(e){}
+}
 
 //------------------------------------------------------------------
 //  MENU UI
@@ -2293,7 +2331,7 @@ nameInput.value=playerName;
 nameInput.addEventListener('input', ()=>savePlayerName(nameInput.value));
 nameInput.addEventListener('change', ()=>{ nameInput.value=playerName; });
 // buttons
-document.getElementById('startBtn').onclick=()=>{ audioInit(); savePlayerName(nameInput.value); gameMode='race'; showMapLobby(); };
+document.getElementById('startBtn').onclick=()=>{ audioInit(); goLandscape(); savePlayerName(nameInput.value); gameMode='race'; showMapLobby(); };
 document.getElementById('againBtn').onclick=()=>{ if(lastWasOnline){ showNet(); } else { showMapLobby(); } };
 document.getElementById('lbBtn').onclick=()=>showLeaderboard();
 document.getElementById('lbBtn2').onclick=()=>showLeaderboard();
@@ -2652,7 +2690,7 @@ async function queueStaked(stake){
   netProg(`Staked ${stake} SUI queue · waiting for an opponent…`);
 }
 function leaveNet(){ if(net&&net.readyState===1) sendNet({t:'cancel'}); online=false; try{ net&&net.close(); }catch(e){} net=null; }
-$net('netBtn').onclick = ()=>showNet();
+$net('netBtn').onclick = ()=>{ goLandscape(); showNet(); };
 $net('netCasual').onclick = ()=>queueCasual();
 $net('netTiers').addEventListener('click', e=>{ const b=e.target.closest('button[data-stake]'); if(b) queueStaked(parseFloat(b.dataset.stake)); });
 $net('netCustomBtn').onclick = ()=>{ const r=$net('netCustomRow'); r.classList.toggle('hidden'); if(!r.classList.contains('hidden')) $net('netCustomAmt').focus(); };
