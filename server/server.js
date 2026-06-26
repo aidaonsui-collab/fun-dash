@@ -23,7 +23,9 @@ const PORT       = process.env.PORT || 8125;
 const FIELD      = 4;                 // casual field size (humans + bots)
 const CASUAL_WAIT= +process.env.CASUAL_WAIT || 6000;   // ms to wait for more humans before filling bots
 const STAKE_FIELD= Math.max(2, Math.min(4, +process.env.STAKE_FIELD || 4));  // max staked pot size (contract caps at 4)
-const STAKE_FILL = +process.env.STAKE_FILL || 8000;    // ms to wait for more stakers once >=2 are queued
+// Lone staked player waits indefinitely. Once the 2nd joins, a 3-min window opens to gather up to
+// 4 players; it races when the window expires OR the pot fills to 4 — humans only, never bots.
+const STAKE_FILL = +process.env.STAKE_FILL || 180000;  // 3 min
 const STAKE_WAIT = +process.env.STAKE_WAIT || 45000;   // ms a staked match has to complete its on-chain handshake
 const TICK_HZ    = +process.env.TICK_HZ || 30;         // sim+broadcast rate (fixed-dt, so determinism is unaffected)
 const BOT_NAMES  = ['BoltBunny','TurboTuna','MetaMutt','PixelPaws','SnaccMan','NovaPaws','FrostFang','Zoomer','GG_Wolf','Krillin22'];
@@ -78,9 +80,10 @@ function enterStaked(c, stake){
   if (!q.includes(c.id)) q.push(c.id);
   const n = liveQ(key).length;
   for (const cc of liveQ(key)) send(cc, { t:'queued', mode:'staked', stake, n, need: 2, max: STAKE_FIELD });
-  if (n >= STAKE_FIELD) formStaked(key);                              // full pot → start now
-  else if (n >= 2 && !stakedTimers.has(key))                         // ≥2 → brief wait for more, then start
+  if (n >= STAKE_FIELD) formStaked(key);                              // pot full (4) → race now
+  else if (n >= 2 && !stakedTimers.has(key))                         // 2nd player in → open the 3-min fill window, then race
     stakedTimers.set(key, setTimeout(() => formStaked(key), STAKE_FILL));
+  // (1 player → no timer; a lone staked player waits indefinitely for an opponent)
 }
 function formStaked(key){
   const t = stakedTimers.get(key); if (t) clearTimeout(t); stakedTimers.delete(key);
