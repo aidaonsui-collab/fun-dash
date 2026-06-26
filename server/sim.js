@@ -114,7 +114,7 @@ function segGroundY(s, x){ if (!s.ramp) return s.y; const t=Math.max(0,Math.min(
 //  Race — authoritative state machine
 // ---------------------------------------------------------------------------
 const DT = 1/30;          // fixed timestep (determinism)
-const FINISH_GRACE = 4.0; // sec to keep simulating after the winner finishes
+const FINISH_GRACE = 8.0; // sec to keep simulating after the winner finishes (wide enough that the spread pack still gets home)
 const MAX_RACE_T   = 130; // hard cap so a stuck race can't run forever (maps are ~1 min)
 
 class Race {
@@ -129,6 +129,7 @@ class Race {
     this.over = false;
     this.racers = entrants.map((e, i) => ({
       id: e.id, name: e.name, char: e.char, isBot: !!e.isBot, idx: i,
+      speedVar: e.isBot ? (0.91 + this.rng()*0.18) : 1,   // bots get a real pace spread (0.91–1.09); humans run true → fair for staked
       x: START_X, y: GROUND_Y, vy: 0, onGround: true, jumps: 0,
       boostT: 0, stunT: 0, runPhase: i * 1.7,
       finished: false, finishTime: 0, place: 0,
@@ -199,9 +200,9 @@ class Race {
       else r.lastPit=null;
 
       // horizontal motion (rubber-band keeps the pack together)
-      let spd = BASE_SPEED;
+      let spd = BASE_SPEED * r.speedVar;
       const behind = leadX - r.x;
-      spd *= 1 + Math.min(behind / 1800, 1) * 0.13;   // gentle catch-up — keep in sync with index.html
+      spd *= 1 + Math.min(behind / 1800, 1) * 0.04;   // faint catch-up — leads (incl. the front pack) now spread out (keep in sync with index.html)
       if (behind < 30) spd *= 0.985;
       if (r.boostT>0) spd *= BOOST_MULT;
       if (r.stunT>0)  spd *= 0.20;
@@ -274,9 +275,12 @@ class Race {
     const allDone = this.racers.every(r => r.finished);
     const graceUp = this.finishOrder.length > 0 && (this.t - this.racer(this.finishOrder[0]).finishTime) > FINISH_GRACE;
     if (allDone || graceUp || this.t > MAX_RACE_T){
-      // anyone who never crossed gets ranked by distance
+      // anyone still running gets a projected time (cruising pace over the distance left), ranked by how far they got
       const stragglers = this.racers.filter(r => !r.finished).sort((a,b)=>b.x-a.x);
-      for (const r of stragglers){ r.place = this.finishOrder.length + 1; this.finishOrder.push(r.id); }
+      for (const r of stragglers){
+        r.finishTime = this.t + Math.max(0, WORLD_LEN - r.x) / (BASE_SPEED * r.speedVar);
+        r.finished = true; r.place = this.finishOrder.length + 1; this.finishOrder.push(r.id);
+      }
       this.over = true;
     }
   }

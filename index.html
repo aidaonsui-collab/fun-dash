@@ -235,10 +235,8 @@
         <div class="pickrow" id="pickrow"></div>
         <div class="nameRow">👤 <input id="nameInput" maxlength="14" placeholder="Your name" autocomplete="off"></div>
         <div class="btnRow">
-          <button class="btn" id="startBtn">RACE!</button>
-          <button class="btn ghost" id="freeBtn">⏱ Free Play</button>
+          <button class="btn" id="startBtn">🏁 Free Race!</button>
           <button class="btn ghost sm" id="netBtn">🌐 Online PvP</button>
-          <button class="btn ghost sm" id="suiBtn">⛓️ SUI Race</button>
           <button class="btn ghost sm" id="lbBtn">🏆 Leaderboard</button>
         </div>
         <div class="legend">
@@ -291,38 +289,12 @@
           <button class="lbTabBtn active" data-tab="champions">🏆 Champions</button>
           <button class="lbTabBtn" data-tab="racers">🏃 Racers</button>
           <button class="lbTabBtn" data-tab="best">⏱ Best Times</button>
-          <button class="lbTabBtn" data-tab="global">🌐 Global</button>
         </div>
         <div class="lbWrap">
           <div class="lbStats" id="lbStats"></div>
           <div class="lbList" id="lbList"></div>
         </div>
         <button class="btn ghost" id="lbBack">BACK</button>
-      </div>
-    </div>
-
-    <!-- ⛓️ SUI Race (testnet) -->
-    <div id="suipanel" class="overlay hidden">
-      <div class="card">
-        <h1>⛓️ <span class="a">SUI RACE</span></h1>
-        <p class="sub">Stake testnet SUI · winner takes the pot − 10% fee · <b>TESTNET</b></p>
-        <div id="suiStatus" class="suiStatus"></div>
-        <button class="btn" id="suiConnect">Connect Wallet</button>
-        <div id="suiWallet" class="hidden">
-          <div class="suiAddr" id="suiAddr"></div>
-          <div class="suiBal" id="suiBal"></div>
-          <p class="sub" style="margin:12px 0 6px">Pick your stake — you race the house, winner takes both:</p>
-          <div class="btnRow" id="suiTiers">
-            <button class="btn ghost sm" data-stake="0.1">0.1 SUI</button>
-            <button class="btn ghost sm" data-stake="0.5">0.5 SUI</button>
-            <button class="btn ghost sm" data-stake="1">1 SUI</button>
-          </div>
-          <div class="suiBal" id="suiHouse" style="margin-top:12px;font-size:12px;opacity:.85"></div>
-          <button class="btn ghost sm" id="suiRecover" style="margin-top:6px;display:none">↩︎ Recover house funds</button>
-        </div>
-        <div id="suiProgress" class="suiProg hidden"></div>
-        <div id="suiResult" class="suiResult hidden"></div>
-        <button class="btn ghost" id="suiBack" style="margin-top:14px">BACK</button>
       </div>
     </div>
 
@@ -456,21 +428,14 @@ let forcedTheme = null;      // map chosen in the vote lobby
 let actx = null;             // WebAudio context (lazily created on first gesture)
 let soundOn = (function(){ try{ return localStorage.getItem('fd_mute')!=='1'; }catch(e){ return true; } })();
 
-// ---- player identity, stats & (local) global-style leaderboard ----
+// ---- player identity & stats ----
 let playerName = ((localStorage.getItem('fd_name')||'').trim()) || ('Racer'+(1000+(Math.random()*9000|0)));
 const BOT_NAMES = ['Ail4778','araBelamagda','SuperHero2500','UptoDown3','jennih75','ulises26','softonic','Ajgarcia18','lalo347','Kuwaiti1981','RunRunash','Scottmann','nySSBossY','OsuBuckeyefever','PixelPaws','TurboTuna','BoltBunny','MetaMutt','Vexel_','SnaccMan','Wizzle','GG_Wolf','NovaPaws','Krillin22','Zoomer','FrostFang'];
-const SEED_BOARD = [
-  ['Millwall',987195],['OsuBuckeyefever',938690],['lalo347',883772],['RunRunash',735854],['Kuwaiti1981',685148],
-  ['Scottmann',663870],['Ajgarcia18',612300],['softonic',561110],['araBelamagda',498233],['SuperHero2500',451774],
-  ['UptoDown3',402120],['jennih75',361988],['ulises26',318450],['nySSBossY',279330],['PixelPaws',231880],
-  ['TurboTuna',198140],['BoltBunny',162770],['MetaMutt',121940],['Vexel_',88210],['SnaccMan',54300]
-];
 function loadStats(){ let s={}; try{ s=JSON.parse(localStorage.getItem('fd_stats'))||{}; }catch(e){}
   return Object.assign({games:0,wins:0,podiums:0,best:null,rating:0,streak:0}, s); }
 let stats = loadStats();
 let lastGain = 0;
-let gameMode = 'race';     // 'race' (rating) | 'freeplay' (time trial) | 'sui' (on-chain stake)
-let suiRace = null;        // active on-chain staked race {roomId, houseAddr, stake, settled}
+let gameMode = 'race';     // 'race' (single-player Free Race vs bots) | 'online' (server-run PvP)
 let lbTab = 'champions';   // leaderboard tab (live wallet-bound board by default)
 let lastBestImproved = false;
 let bestTimes = (function(){ try{ return JSON.parse(localStorage.getItem('fd_best'))||{}; }catch(e){ return {}; } })();
@@ -652,7 +617,7 @@ function makeRacer(opts){
     species: opts.species, spriteId: opts.id, isPlayer: !!opts.isPlayer,
     x: START_X, y: GROUND_Y, vy: 0, onGround: true, jumps: 0,
     runPhase: Math.random()*6,
-    speedVar: opts.isPlayer ? 1 : (0.99 + Math.random()*0.02),  // ~equal baseline for everyone
+    speedVar: opts.isPlayer ? 1 : (0.91 + Math.random()*0.18),  // bots get a real pace spread (0.91–1.09); you run true — win on skill
     item: null, finished: false, finishTime: 0,
     boostT: 0, stunT: 0, shield: false, shieldT: 0,
     aiUseT: 0, hitObstacles: new Set(),
@@ -855,7 +820,7 @@ function update(dt){
     // ---- horizontal motion (rubber-banded so nobody runs away without a reason) ----
     let spd = BASE_SPEED * r.speedVar;
     const behind = leadX - r.x;
-    spd *= 1 + Math.min(behind / 1800, 1) * 0.13;   // gentle catch-up (≤+13%) — skill leads survive
+    spd *= 1 + Math.min(behind / 1800, 1) * 0.04;   // faint catch-up (≤+4%) — leads (incl. the front pack) now spread out
     if (behind < 30) spd *= 0.985;                   // leader barely eases (don't glue it back to the pack)
     if (r.boostT>0) spd *= BOOST_MULT;
     if (r.stunT>0)  spd *= 0.20;                      // stun = limp, not a near-stop
@@ -2029,24 +1994,22 @@ function updateItemSlot(){
 // ----- map vote lobby -----
 let lobbyTimer = null, lobbyThemes = [];
 function showMapLobby(){
-  if (gameMode==='sui'){ gameMode='race'; suiRace=null; }   // leaving a SUI race → normal play
   if (lobbyTimer){ clearInterval(lobbyTimer); lobbyTimer=null; }
   document.getElementById('menu').classList.add('hidden');
   document.getElementById('results').classList.add('hidden');
   hud.classList.add('hidden');
   document.getElementById('maplobby').classList.remove('hidden');
   state='maplobby';
-  const free = gameMode==='freeplay';
-  // Free Play = solo time trial → pick ANY of the 8 maps; Race = vote between 2 random maps
-  lobbyThemes = free ? Object.keys(THEME) : Object.keys(THEME).sort(()=>Math.random()-0.5).slice(0,2);
-  document.getElementById('mapTitle').innerHTML = free ? '⏱ <span class="a">FREE PLAY</span>' : 'VOTE <span class="a">MAP</span>';
-  document.getElementById('mapSub').textContent = free ? 'Pick a map to set your best time' : 'Pick your stage';
+  // Free Race = pick ANY of the 8 maps, race the pack of bots, and set your best time on that map
+  lobbyThemes = Object.keys(THEME);
+  document.getElementById('mapTitle').innerHTML = '🏁 <span class="a">FREE RACE</span>';
+  document.getElementById('mapSub').textContent = 'Pick a map — race the pack & set your best time';
   const row = document.getElementById('maprow'); row.innerHTML='';
   lobbyThemes.forEach(tk=>{
     const T = THEME[tk];
     const bt = bestTimes[tk];
     const card = document.createElement('div'); card.className='mapcard';
-    const label = free ? (bt!=null ? `best ${bt.toFixed(2)}s` : 'no time yet') : 'tap to race';
+    const label = bt!=null ? `best ${bt.toFixed(2)}s` : 'no time yet';
     card.innerHTML =
       `<div class="thumb" style="background:linear-gradient(${T.sky1},${T.sky2})">`+
         `<div style="position:absolute;left:0;right:0;bottom:0;height:32px;background:${T.dirt}"></div>`+
@@ -2057,18 +2020,7 @@ function showMapLobby(){
     card.onclick = ()=>{ audioInit(); startGame(tk); };
     row.appendChild(card);
   });
-  const tEl = document.getElementById('lobbyTimer');
-  if (free){
-    tEl.textContent = '🏃 Solo run vs 3 bots — beat your best!';
-    return;   // no auto-start in Free Play; player chooses the map
-  }
-  let t = 5;
-  tEl.textContent = 'Auto-starting in '+t+'…';
-  lobbyTimer = setInterval(()=>{
-    t--;
-    if (t<=0) startGame(lobbyThemes[(Math.random()*lobbyThemes.length)|0]);
-    else tEl.textContent = 'Auto-starting in '+t+'…';
-  }, 1000);
+  document.getElementById('lobbyTimer').textContent = '🏃 Race 3 bots — win the podium & beat your best!';
 }
 
 // map chosen → build the race, then show the pregame lobby with the 4 racers
@@ -2114,6 +2066,14 @@ function endRace(){
   state='results';
   hud.classList.add('hidden');
   stopMusic();
+  // racers still running when you cross get a projected time (their cruising pace over the distance left)
+  // so the podium/results show a real finish spread instead of DNFs
+  for (const r of racers){
+    if (!r.finished){
+      r.finishTime = raceTime + Math.max(0, WORLD_LEN - r.x) / (BASE_SPEED * (r.speedVar||1));
+      r.finished = true; r.projected = true;
+    }
+  }
   const s = standings();
   const me = racers[0];
   const myPlace = s.indexOf(me)+1;
@@ -2122,13 +2082,13 @@ function endRace(){
   if (myPlace===1){ stats.wins++; stats.streak=(stats.streak||0)+1; } else { stats.streak=0; }
   if (myPlace<=3) stats.podiums++;
   if (me.finished && (stats.best===null || me.finishTime<stats.best)) stats.best=+me.finishTime.toFixed(2);
-  // per-map best time (Free Play is the time-trial mode, but Race counts too)
+  // per-map best time — every Free Race finish updates your best for that map (feeds the Best Times tab)
   lastBestImproved = false;
   if (me.finished){
     const prev = bestTimes[track.theme];
     if (prev===undefined || me.finishTime < prev){ bestTimes[track.theme]=+me.finishTime.toFixed(2); lastBestImproved=true; saveBest(); }
   }
-  // rating only moves in Race mode — Free Play is a pure time trial
+  // rating ticks up only in single-player Free Race (online has its own server-side stats)
   if (gameMode==='race'){
     const placePts = [25,14,8,3][myPlace-1] || 1;
     const finishBonus = me.finished ? 6 : 0;
@@ -2140,8 +2100,7 @@ function endRace(){
   recordChar(chosenChar, myPlace, racers.length, me.finished ? me.finishTime : null);   // per-character stats
   // --- title ---
   document.getElementById('resultTitle').innerHTML =
-    gameMode==='freeplay' ? (me.finished?'⏱ TIME TRIAL':'DNF 😵')
-    : (myPlace===1 ? '🏆 YOU WIN!' : (myPlace===racers.length? 'LAST… 😵' : `${ordinal(myPlace)} place!`));
+    myPlace===1 ? '🏆 YOU WIN!' : (myPlace===racers.length? 'LAST… 😵' : `${ordinal(myPlace)} place!`);
   const gainBits = [];
   if (gameMode==='race'){
     gainBits.push('+'+lastGain+' rating');
@@ -2151,8 +2110,6 @@ function endRace(){
   }
   if (lastBestImproved) gainBits.push(`🏁 NEW BEST!`);
   document.getElementById('ratingGain').textContent = gainBits.join('  ·  ');
-  // --- on-chain settlement for a SUI staked race ---
-  if (gameMode==='sui' && suiRace && !suiRace.settled){ settleSuiRace(myPlace===1); }
   // --- podium: top 3 (render order 2nd · 1st · 3rd so 1st is centre & tallest) ---
   const cols=[[1,112,'#9fb0c8'],[0,150,'#ffd24a'],[2,84,'#cd8e54']];
   const pod=document.getElementById('podium'); pod.innerHTML='';
@@ -2192,7 +2149,7 @@ function renderLeaderboard(){
     `<div class="row"><span>Win streak</span><b>${stats.streak||0}${stats.streak>1?' 🔥':''}</b></div>`+
     `<div class="row"><span>Best time</span><b>${stats.best!=null?stats.best+'s':'—'}</b></div>`;
   const list=document.getElementById('lbList'); list.innerHTML='';
-  // ----- BEST TIMES tab: your fastest finish per map (Free Play feeds this) -----
+  // ----- BEST TIMES tab: your fastest finish per map (every Free Race feeds this) -----
   if (lbTab==='best'){
     const rows = Object.keys(THEME).map(k=>({name:THEME[k].name, t:bestTimes[k]}));
     rows.sort((a,b)=> (a.t==null?Infinity:a.t) - (b.t==null?Infinity:b.t));
@@ -2207,22 +2164,6 @@ function renderLeaderboard(){
     });
     return;
   }
-  // ----- GLOBAL tab: rating ladder (seeded) -----
-  const all = SEED_BOARD.map(e=>({name:e[0], sc:e[1], me:false}));
-  all.push({name:playerName, sc:stats.rating, me:true});
-  all.sort((a,b)=>b.sc-a.sc);
-  const myRank = all.findIndex(e=>e.me)+1;
-  const pin=document.createElement('div'); pin.className='lbRow pin';
-  pin.innerHTML=`<span class="rk">#${myRank}</span><span class="nm">${esc(playerName)} (you)</span><span class="sc">${stats.rating.toLocaleString()}</span>`;
-  list.appendChild(pin);
-  let meRow=null;
-  all.forEach((e,i)=>{
-    const row=document.createElement('div'); row.className='lbRow'+(e.me?' me':'')+(i<3?' top3':'');
-    row.innerHTML=`<span class="rk">${i+1}</span><span class="nm">${esc(e.name)}${e.me?' (you)':''}</span><span class="sc">${e.sc.toLocaleString()}</span>`;
-    list.appendChild(row); if(e.me) meRow=row;
-  });
-  // auto-scroll so your highlighted rank is visible (you usually start near the bottom)
-  if (meRow) setTimeout(()=>{ list.scrollTop = Math.max(0, meRow.offsetTop - list.clientHeight/2); }, 40);
 }
 // ----- per-character stats tab: each racer's races / wins / best / SUI won -----
 function renderRacers(){
@@ -2258,9 +2199,8 @@ function shareToX(){
   window.open('https://twitter.com/intent/tweet?text='+encodeURIComponent(txt), '_blank', 'noopener');
 }
 function showMenu(){
-  ['maplobby','lobby','results','leaderboard','countdown','suipanel','netpanel'].forEach(id=>document.getElementById(id).classList.add('hidden'));
+  ['maplobby','lobby','results','leaderboard','countdown','netpanel'].forEach(id=>document.getElementById(id).classList.add('hidden'));
   hud.classList.add('hidden'); document.getElementById('menu').classList.remove('hidden'); state='menu';
-  if (gameMode==='sui'){ gameMode='race'; suiRace=null; }
   if (online || net){ leaveNet(); }
   if (gameMode==='online') gameMode='race';
   lastWasOnline=false;
@@ -2354,7 +2294,6 @@ nameInput.addEventListener('input', ()=>savePlayerName(nameInput.value));
 nameInput.addEventListener('change', ()=>{ nameInput.value=playerName; });
 // buttons
 document.getElementById('startBtn').onclick=()=>{ audioInit(); savePlayerName(nameInput.value); gameMode='race'; showMapLobby(); };
-document.getElementById('freeBtn').onclick=()=>{ audioInit(); savePlayerName(nameInput.value); gameMode='freeplay'; showMapLobby(); };
 document.getElementById('againBtn').onclick=()=>{ if(lastWasOnline){ showNet(); } else { showMapLobby(); } };
 document.getElementById('lbBtn').onclick=()=>showLeaderboard();
 document.getElementById('lbBtn2').onclick=()=>showLeaderboard();
@@ -2371,77 +2310,6 @@ document.querySelectorAll('.lbTabBtn').forEach(b=>b.onclick=()=>{
 })();
 document.getElementById('menuBtn').onclick=()=>showMenu();
 
-// ---- ⛓️ SUI Race (on-chain staking, testnet) ----
-const $sui = (id)=>document.getElementById(id);
-async function refreshSuiWallet(){
-  const a = window.FunSui.address; if(!a) return;
-  $sui('suiWallet').classList.remove('hidden');
-  $sui('suiAddr').textContent = a.slice(0,8)+'…'+a.slice(-6);
-  $sui('suiBal').textContent = 'Balance: …';
-  try{ const b = await window.FunSui.getBalance(); $sui('suiBal').textContent = 'Balance: '+window.FunSui.mist2sui(b).toFixed(3)+' SUI (testnet)'; }
-  catch(e){ $sui('suiBal').textContent = 'Balance: ?'; }
-  // persistent house wallet — show its address + balance, offer to recover any winnings
-  try{ const ha=window.FunSui.houseAddress(), hb=await window.FunSui.houseBalance();
-    $sui('suiHouse').textContent = '🏦 House wallet '+ha.slice(0,8)+'…'+ha.slice(-6)+' · '+window.FunSui.mist2sui(hb).toFixed(3)+' SUI';
-    $sui('suiRecover').style.display = hb>0n ? '' : 'none'; }
-  catch(e){ $sui('suiHouse').textContent=''; $sui('suiRecover').style.display='none'; }
-}
-async function showSui(){
-  audioInit(); savePlayerName(nameInput.value);
-  ['menu','maplobby','lobby','results','leaderboard','countdown'].forEach(id=>$sui(id).classList.add('hidden'));
-  hud.classList.add('hidden'); $sui('suipanel').classList.remove('hidden'); state='sui';
-  $sui('suiWallet').classList.add('hidden'); $sui('suiProgress').classList.add('hidden'); $sui('suiResult').classList.add('hidden');
-  const status=$sui('suiStatus'), connectBtn=$sui('suiConnect'); connectBtn.disabled=false;
-  if(!window.FunSui){ status.textContent='Loading on-chain module…'; connectBtn.classList.add('hidden');
-    await new Promise(r=>{ if(window.FunSui) return r(); window.addEventListener('funsui-ready', r, {once:true}); setTimeout(r,6000); }); }
-  if(!window.FunSui){ status.textContent='⚠️ On-chain module failed to load — check your connection and reopen.'; return; }
-  if(!window.FunSui.hasWallet()){
-    status.innerHTML='No Sui wallet detected. Install <b>Slush</b> / Sui Wallet, switch it to <b>Testnet</b>, then reopen.';
-    connectBtn.classList.add('hidden'); return;
-  }
-  if(window.FunSui.address){ status.textContent='Connected ✓'; connectBtn.classList.add('hidden'); refreshSuiWallet(); }
-  else { status.textContent='Connect your Sui wallet (Testnet) to stake.'; connectBtn.classList.remove('hidden'); }
-}
-async function settleSuiRace(won){
-  suiRace.settled = true;
-  const el = $sui('ratingGain'); el.textContent = '⛓️ Settling on-chain…';
-  try{
-    await window.FunSui.settle(suiRace.roomId, won ? window.FunSui.address : suiRace.houseAddr);
-    const pot = suiRace.stake*2, payout = pot*0.9;
-    if (won) recordCharSui(chosenChar, payout);
-    el.textContent = won ? `⛓️ 🏆 Winner paid ${payout.toFixed(3)} SUI on-chain (pot ${pot} − 10% fee → dev)`
-                         : `⛓️ 😵 House took the pot — ${payout.toFixed(3)} SUI; 10% fee → dev`;
-  }catch(e){ el.textContent = '⛓️ ⚠️ Settle failed: '+(e.message||e); }
-}
-$sui('suiBtn').onclick = ()=>showSui();
-$sui('suiBack').onclick = ()=>{ $sui('suipanel').classList.add('hidden'); gameMode='race'; suiRace=null; showMenu(); };
-$sui('suiConnect').onclick = async ()=>{
-  const status=$sui('suiStatus'), btn=$sui('suiConnect'); btn.disabled=true; status.textContent='Connecting…';
-  try{ await window.FunSui.connect(); status.textContent='Connected ✓ ('+(window.FunSui.walletName()||'wallet')+')'; btn.classList.add('hidden'); await refreshSuiWallet(); }
-  catch(e){ status.textContent='⚠️ '+(e.message||e); btn.disabled=false; }
-};
-$sui('suiRecover').onclick = async ()=>{
-  const el=$sui('suiHouse'), prev=el.textContent; el.textContent='↩︎ Recovering house funds…';
-  try{ const r = await window.FunSui.sweepHouse(); el.textContent='✓ Recovered '+r.swept.toFixed(3)+' SUI → your wallet'; setTimeout(refreshSuiWallet, 1600); }
-  catch(err){ el.textContent='⚠️ '+(err.message||err); setTimeout(()=>{ el.textContent=prev; }, 2600); }
-};
-$sui('suiTiers').addEventListener('click', async (e)=>{
-  const b=e.target.closest('button[data-stake]'); if(!b) return;
-  const stake=parseFloat(b.dataset.stake);
-  const prog=$sui('suiProgress'); $sui('suiWallet').classList.add('hidden'); $sui('suiResult').classList.add('hidden');
-  prog.classList.remove('hidden'); prog.textContent='Preparing…';
-  try{
-    const r = await window.FunSui.playStaked(stake, (m)=>{ prog.textContent=m; });
-    suiRace = { roomId:r.roomId, houseAddr:r.houseAddr, stake, settled:false };
-    gameMode = 'sui';
-    prog.textContent = '✓ Staked '+stake+' SUI — GO!';
-    $sui('suipanel').classList.add('hidden');
-    startGame();   // random map, vs bots; endRace settles the escrow on-chain
-  }catch(err){
-    prog.textContent = '⚠️ '+(err.message||err)+'\n(Only gas was spent; try again.)';
-    setTimeout(()=>{ prog.classList.add('hidden'); $sui('suiWallet').classList.remove('hidden'); refreshSuiWallet(); }, 1500);
-  }
-});
 
 //------------------------------------------------------------------
 //  MINI SFX (WebAudio, optional)
@@ -2601,7 +2469,7 @@ async function onNetMsg(m){
 
 // build local renderer racers from the server's roster; my racer goes to index 0
 function onMatch(m){
-  ['menu','maplobby','lobby','results','leaderboard','suipanel','netpanel'].forEach(id=>document.getElementById(id).classList.add('hidden'));
+  ['menu','maplobby','lobby','results','leaderboard','netpanel'].forEach(id=>document.getElementById(id).classList.add('hidden'));
   forcedTheme = m.theme;
   track = buildTrack(m.seed, m.theme);          // same seed+theme => identical track to the server
   traps=[]; fx=[]; feed=[]; camX=0; raceTime=0; flashT=0;
@@ -2759,7 +2627,7 @@ function netShowModes(){ $net('netModes').style.display=''; $net('netProgress').
 function netShowQueue(){ $net('netModes').style.display='none'; $net('netCancel').style.display=''; }
 async function showNet(){
   audioInit(); savePlayerName(nameInput.value);
-  ['menu','maplobby','lobby','results','leaderboard','countdown','suipanel'].forEach(id=>document.getElementById(id).classList.add('hidden'));
+  ['menu','maplobby','lobby','results','leaderboard','countdown'].forEach(id=>document.getElementById(id).classList.add('hidden'));
   hud.classList.add('hidden'); $net('netpanel').classList.remove('hidden'); state='net'; netShowModes();
   const status=$net('netStatus'); status.textContent='Connecting to game server…';
   try{ await connectNet(); status.textContent='Connected ✓ — pick a mode.'; }
@@ -2800,7 +2668,7 @@ requestAnimationFrame(frame);
 
 <!-- ───────────────────────── SUI on-chain layer (Phase 0, TESTNET) ─────────────────────────
      Loads @mysten/sui + wallet-standard via ESM and exposes window.FunSui. Activates only when
-     the player opens "SUI Race"; the rest of the game runs with zero crypto deps. -->
+     the player opens "Online PvP" (staked); the rest of the game runs with zero crypto deps. -->
 <script type="module">
 import { SuiClient, getFullnodeUrl } from 'https://esm.sh/@mysten/sui@1.24.0/client';
 import { Transaction } from 'https://esm.sh/@mysten/sui@1.24.0/transactions';
@@ -2981,5 +2849,10 @@ window.FunSui = { ...S, connect, getConfig, getBalance, playStaked, settle, sign
   hasWallet:()=>!!findWallet(), wallets:()=>listWallets().map(w=>w.name||'?'), walletName:()=>S.wallet&&S.wallet.name };
 window.dispatchEvent(new Event('funsui-ready'));
 </script>
+<!-- Vercel Web Analytics -->
+<script>
+  window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };
+</script>
+<script defer src="/_vercel/insights/script.js"></script>
 </body>
 </html>

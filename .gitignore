@@ -4,3 +4,4 @@ node_modules/
 
 # raw AI sprite intermediates (working files, not used by the game)
 assets/_*.png
+.vercel
