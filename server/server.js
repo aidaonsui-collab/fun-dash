@@ -18,6 +18,9 @@ const http = require('http');
 const { WebSocketServer } = require('ws');
 const { Race, DT, THEME_KEYS } = require('./sim');
 const settle = require('./settle');
+const profiles = require('./profiles');
+const auth = require('./auth');
+const ADMIN_WALLET = (process.env.ADMIN_WALLET || '0xed3057fe7fca58e56228605bbb9630a4f38a38abcea1dcd60ec41a8690584b97').toLowerCase();
 
 const PORT       = process.env.PORT || 8125;
 const FIELD      = 4;                 // casual field size (humans + bots)
@@ -189,6 +192,13 @@ async function finalizeRoom(room){
     } else settleResult = { error: 'winner had no wallet address' };
   }
 
+  // server-authoritative stats: record for any wallet-bound racer (claimed profiles only)
+  const winPayoutSui = (settleResult && settleResult.payout != null) ? Number(settleResult.payout)/1e9 : 0;
+  for (const e of room.entrants){
+    if (e.bot || !e.addr) continue;
+    profiles.recordResult(e.addr, { won: e.id === winId, sui: e.id === winId ? winPayoutSui : 0 });
+  }
+
   bcast(room, { t:'result', winner: winId, order, settle: settleResult });
   for (const e of room.entrants){ const c = clients.get(e.id); if (c){ c.room = null; c.state = 'idle'; } }
   setTimeout(() => rooms.delete(room.id), 10000);
@@ -209,7 +219,7 @@ const httpServer = http.createServer((req, res) => {
 const wss = new WebSocketServer({ server: httpServer });
 
 wss.on('connection', (ws) => {
-  const c = { id: 'c'+nextCid++, ws, name:'Racer', char:0, addr:null, room:null, state:'idle', handshake:null };
+  const c = { id: 'c'+nextCid++, ws, name:'Racer', char:0, addr:null, wallet:null, profileName:null, isAdmin:false, room:null, state:'idle', handshake:null };
   clients.set(c.id, c);
   send(c, { t:'welcome', id: c.id, field: FIELD });
 
@@ -224,11 +234,37 @@ wss.on('connection', (ws) => {
       case 'find':
         if (c.state !== 'idle') break;
         if (m.addr) c.addr = String(m.addr);
+        if (c.wallet && profiles.get(c.wallet) && profiles.get(c.wallet).banned){ send(c, { t:'error', msg:'this wallet is banned' }); break; }
         if (m.mode === 'staked'){
           if (!c.addr){ send(c, { t:'error', msg:'connect a wallet before a staked race' }); break; }
           enterStaked(c, Number(m.stake) || 0.1);
         } else enterCasual(c);
         break;
+      case 'auth': {                       // prove wallet ownership → load this wallet's profile
+        if (!(await auth.ownsWallet(m.message, m.signature, m.addr)) || !auth.freshFor(m.message, m.addr)){ send(c, { t:'auth_err', msg:'signature did not verify' }); break; }
+        c.wallet = String(m.addr).toLowerCase(); c.addr = String(m.addr); c.isAdmin = c.wallet === ADMIN_WALLET;
+        const p = profiles.getPublic(c.wallet);
+        if (p){ c.profileName = p.name; c.name = p.name; }
+        send(c, { t:'profile', profile: p, isAdmin: c.isAdmin, needsName: !p });
+        break;
+      }
+      case 'claim_name': {                 // SET-ONCE, unique, signed display name
+        if (!(await auth.ownsWallet(m.message, m.signature, m.addr)) || !auth.freshFor(m.message, m.addr) || !String(m.message||'').includes(String(m.name||''))){ send(c, { t:'name_err', msg:'signature did not verify' }); break; }
+        const r = profiles.claimName(m.addr, m.name);
+        if (r.error){ send(c, { t:'name_err', msg: r.error }); break; }
+        c.wallet = String(m.addr).toLowerCase(); c.addr = String(m.addr); c.profileName = r.profile.name; c.name = r.profile.name; c.isAdmin = c.wallet === ADMIN_WALLET;
+        send(c, { t:'profile', profile: r.profile, isAdmin: c.isAdmin, needsName:false });
+        break;
+      }
+      case 'leaderboard':
+        send(c, { t:'leaderboard', rows: profiles.leaderboard(50) });
+        break;
+      case 'admin': {                      // hide / ban / rename — gated to the dev wallet
+        if (!(await auth.ownsWallet(m.message, m.signature, m.addr)) || !auth.freshFor(m.message, m.addr) || String(m.addr).toLowerCase() !== ADMIN_WALLET){ send(c, { t:'admin_err', msg:'not authorized' }); break; }
+        const r = profiles.adminSet(m.wallet, { name:m.name, hidden:m.hidden, banned:m.banned });
+        send(c, { t:'admin_ok', result: r, rows: profiles.leaderboard(50) });
+        break;
+      }
       case 'staked_room':                 // host reports the on-chain RaceRoom it created+joined
         if (c.handshake && c.handshake.host === c){ const hs = c.handshake; hs.onchainRoom = String(m.room); hs.joined.add(c.id);
           for (const g of hs.players.slice(1)) send(g, { t:'stake_join', room: hs.onchainRoom, stake: hs.stake });
