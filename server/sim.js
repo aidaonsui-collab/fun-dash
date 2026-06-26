@@ -189,8 +189,8 @@ class Race {
       // horizontal motion (rubber-band keeps the pack together)
       let spd = BASE_SPEED;
       const behind = leadX - r.x;
-      spd *= 1 + Math.min(behind / 1500, 1) * 0.22;
-      if (behind < 30) spd *= 0.93;
+      spd *= 1 + Math.min(behind / 1800, 1) * 0.13;   // gentle catch-up — keep in sync with index.html
+      if (behind < 30) spd *= 0.985;
       if (r.boostT>0) spd *= BOOST_MULT;
       if (r.stunT>0)  spd *= 0.20;
       if (inPit)      spd *= 0.5;

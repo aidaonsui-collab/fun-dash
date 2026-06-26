@@ -808,8 +808,8 @@ function update(dt){
     // ---- horizontal motion (rubber-banded so nobody runs away without a reason) ----
     let spd = BASE_SPEED * r.speedVar;
     const behind = leadX - r.x;
-    spd *= 1 + Math.min(behind / 1500, 1) * 0.22;   // trailers catch up (up to +22%)
-    if (behind < 30) spd *= 0.93;                    // the leader eases off a touch
+    spd *= 1 + Math.min(behind / 1800, 1) * 0.13;   // gentle catch-up (≤+13%) — skill leads survive
+    if (behind < 30) spd *= 0.985;                   // leader barely eases (don't glue it back to the pack)
     if (r.boostT>0) spd *= BOOST_MULT;
     if (r.stunT>0)  spd *= 0.20;                      // stun = limp, not a near-stop
     if (inPit)      spd *= 0.5;                        // slog through the muck
@@ -1036,7 +1036,7 @@ function render(){
     // when racers bunch up, lift the ones behind a touch so big chibi heads stagger
     // instead of piling into a "split head" look (render-only — shadows stay grounded)
     let _px=-1e9, _stk=0;
-    for (const r of order){ _stk = (r.x-_px < 52 && !r.finished) ? Math.min(_stk+1,3) : 0; r._clusterLift = _stk*8; _px=r.x; }
+    for (const r of order){ _stk = (r.x-_px < 56 && !r.finished) ? Math.min(_stk+1,4) : 0; r._clusterLift = _stk*15; _px=r.x; }
     for (const r of order) drawCritter(r);
     drawFx();
     drawSpeedLines();
