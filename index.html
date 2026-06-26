@@ -1753,16 +1753,13 @@ function drawSprite(r, x, y, spr, air, stun, bob){
     ctx.translate(x, y + bob + runLift);
     ctx.rotate(lean);
     ctx.scale(sx, sy);
-    if (stripReady && !air){
+    if (stripReady){
+      // ONE path for ground AND air: a whole strip cell (never split; identical aspect either way).
       const fr=sheet.frames; let idx=Math.floor(r.runPhase/(Math.PI*2)*fr); idx=((idx%fr)+fr)%fr;
       ctx.drawImage(strip, idx*cellW, 0, cellW, cellH, -W/2, -H, W, H);
-    } else if (air){
-      const aw = H * spr.naturalWidth / spr.naturalHeight;      // PFP's OWN aspect (the strip's W distorts it → looks "split")
-      ctx.drawImage(spr, -aw/2, -H, aw, H);                     // mid-jump: legs tucked, no swing
     } else {
-      // fallback while a run-strip is still loading (slow CDN / phone): draw the WHOLE sprite —
-      // never split into bands — so a big chibi head can never be cut. The bounce/lean/squash
-      // from the outer transform still sells motion; real leg animation resumes once the strip loads.
+      // no strip (blub / still loading): draw the WHOLE static PFP at its own aspect (W=H*spr aspect
+      // here, since cellW/cellH fall back to the PFP dims). Never split, correct proportions.
       ctx.drawImage(spr, -W/2, -H, W, H);
     }
     ctx.restore();
