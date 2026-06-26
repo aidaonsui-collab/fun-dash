@@ -1052,11 +1052,19 @@ function render(){
     drawHazards();
     drawFinish();
     const order = racers.slice().sort((a,b)=>a.x-b.x);   // back-to-front by x
-    // when racers bunch up, lift the ones behind a touch so big chibi heads stagger
-    // instead of piling into a "split head" look (render-only — shadows stay grounded)
-    let _px=-1e9, _stk=0;
-    for (const r of order){ _stk = (r.x-_px < 56 && !r.finished) ? Math.min(_stk+1,4) : 0; r._clusterLift = _stk*4; r._clusterFanX = _stk*44; _px=r.x; }
-    for (const r of order) drawCritter(r);
+    // de-pile clusters (render-only): keep the FRONT-most racer sharp & in place; trailing
+    // ones fan BACK + FADE so overlapping big chibi heads read as a receding pack, never a
+    // merged "split head". Computed front→back so depth 0 is the leader of each cluster.
+    let _nx=1e9, _d=0;
+    for (let i=order.length-1; i>=0; i--){ const r=order[i];
+      _d = (_nx - r.x < 60 && !r.finished) ? Math.min(_d+1,4) : 0;
+      r._clusterFanX = _d*50; r._clusterLift = _d*3; r._clusterAlpha = Math.max(0.5, 1 - _d*0.17);
+      _nx = r.x;
+    }
+    for (const r of order){ const fa=r._clusterAlpha||1;
+      if (fa<1){ ctx.save(); ctx.globalAlpha=fa; drawCritter(r); ctx.restore(); }   // trailing racers recede
+      else drawCritter(r);
+    }
     drawFx();
     drawSpeedLines();
   }
