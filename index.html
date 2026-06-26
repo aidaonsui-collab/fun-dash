@@ -391,7 +391,7 @@ CHARS.forEach(c => { const im = new Image(); im.src = 'assets/' + c.id + '.png';
 // feet-anchored cells. The run cycle auto-links to running speed (faster = faster):
 //   SHEET.hippo = { src:'assets/hippo_run.png', frames:8 };
 // Air & stun keep using the static PFP, so you can enable characters one at a time.
-const SHEET_V = '4';   // bump to bust any stale browser cache of the run-cycle strips
+const SHEET_V = '5';   // bump to bust any stale browser cache of the run-cycle strips
 const SHEET = {
   hippo: { src:'assets/hippo_run.png?v='+SHEET_V, frames:4 },
   blub:  { src:'assets/blub_run.png?v='+SHEET_V,  frames:4 },
@@ -403,7 +403,7 @@ const SHEET = {
   adeniyi:{ src:'assets/adeniyi_run.png?v='+SHEET_V, frames:4 },
   alon:  { src:'assets/alon_run.png?v='+SHEET_V,  frames:4 },
   vitalik:{ src:'assets/vitalik_run.png?v='+SHEET_V, frames:4 },
-  elon:  { src:'assets/elon_run.png?v='+SHEET_V,  frames:4 },
+  elon:  { src:'assets/elon_run.png?v='+SHEET_V,  frames:3 },   // dropped 1 botched AI frame (torn head)
   wojak: { src:'assets/wojak_run.png?v='+SHEET_V, frames:3 },   // dropped 1 botched AI frame
 };
 const STRIP = {};
@@ -1036,7 +1036,7 @@ function render(){
     // when racers bunch up, lift the ones behind a touch so big chibi heads stagger
     // instead of piling into a "split head" look (render-only — shadows stay grounded)
     let _px=-1e9, _stk=0;
-    for (const r of order){ _stk = (r.x-_px < 56 && !r.finished) ? Math.min(_stk+1,4) : 0; r._clusterLift = _stk*15; _px=r.x; }
+    for (const r of order){ _stk = (r.x-_px < 56 && !r.finished) ? Math.min(_stk+1,4) : 0; r._clusterLift = _stk*15; r._clusterFanX = _stk*30; _px=r.x; }
     for (const r of order) drawCritter(r);
     drawFx();
     drawSpeedLines();
@@ -1727,7 +1727,7 @@ function drawSprite(r, x, y, spr, air, stun, bob){
 }
 
 function drawCritter(r){
-  const x = r.x - camX, y = r.y - (r._clusterLift||0);   // cluster stagger (render-only; shadow stays on ground)
+  const x = r.x - camX - (r._clusterFanX||0), y = r.y - (r._clusterLift||0);   // cluster fan (render-only): spread piled racers up-and-back so big chibi heads/labels don't overlap
   if (x>VW+80 || x<-80) return;
   const air = !r.onGround;
   const stun = r.stunT>0;
